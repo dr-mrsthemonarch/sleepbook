@@ -16,10 +16,14 @@ set(CMAKE_AUTORCC ON)
 set(SOURCES
         main.cpp
         classes/mainwindow.cpp
+        classes/symptomwidget.cpp
+        classes/symptom.cpp
 )
 
 set(HEADERS
         classes/mainwindow.h
+        classes/symptomwidget.h
+        classes/symptom.h
 )
 
 # Create executable

@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include <QTextEdit>
 #include <QListWidget>
+#include <QScrollArea>
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -17,6 +18,10 @@
 #include <QFile>
 #include <QTextStream>
 #include <QDir>
+#include <QDialog>
+#include <QComboBox>
+#include "symptom.h"
+#include "symptomwidget.h"
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -34,21 +39,27 @@ private:
     void setupUI();
     void loadSymptoms();
     void saveSymptoms();
+    void rebuildSymptomWidgets();
     bool saveEntry(const QString& username);
+    bool saveSummaryEntry(const QString& username);
     QString getCurrentDataDirectory();
+    QString getSymptomDataFile();
+    void showAddSymptomDialog();
 
     // UI Components
     QTextEdit* notesEdit;
-    QListWidget* symptomsList;
+    QScrollArea* symptomsScrollArea;
+    QWidget* symptomsContainer;
+    QVBoxLayout* symptomsLayout;
     QDateEdit* dateEdit;
     QTimeEdit* bedtimeEdit;
     QTimeEdit* wakeupEdit;
-    QLineEdit* newSymptomEdit;
     QPushButton* saveButton;
     QPushButton* clearButton;
     QPushButton* addSymptomButton;
 
-    QStringList defaultSymptoms;
+    QList<Symptom> symptoms;
+    QList<SymptomWidget*> symptomWidgets;
 };
 
 #endif // MAINWINDOW_H

@@ -4,6 +4,7 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent) {
     setupUI();
     loadSymptoms();
+    rebuildSymptomWidgets();
 }
 
 MainWindow::~MainWindow() {
@@ -13,18 +14,18 @@ MainWindow::~MainWindow() {
 void MainWindow::setupUI() {
     setWindowTitle("Sleep Quality Tracker");
     resize(900, 600);
-    
+
     QWidget* centralWidget = new QWidget(this);
     setCentralWidget(centralWidget);
-    
+
     QHBoxLayout* mainLayout = new QHBoxLayout(centralWidget);
-    
+
     // Left Panel - Notes
     QVBoxLayout* leftLayout = new QVBoxLayout();
     QLabel* notesLabel = new QLabel("Sleep Notes:");
     notesLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
     leftLayout->addWidget(notesLabel);
-    
+
     // Date and time inputs
     QHBoxLayout* dateLayout = new QHBoxLayout();
     dateLayout->addWidget(new QLabel("Date:"));
@@ -34,99 +35,101 @@ void MainWindow::setupUI() {
     dateLayout->addWidget(dateEdit);
     dateLayout->addStretch();
     leftLayout->addLayout(dateLayout);
-    
+
     QHBoxLayout* timeLayout = new QHBoxLayout();
     timeLayout->addWidget(new QLabel("Bedtime:"));
     bedtimeEdit = new QTimeEdit();
     bedtimeEdit->setTime(QTime(22, 0));
     timeLayout->addWidget(bedtimeEdit);
-    
+
     timeLayout->addWidget(new QLabel("Wake time:"));
     wakeupEdit = new QTimeEdit();
     wakeupEdit->setTime(QTime(7, 0));
     timeLayout->addWidget(wakeupEdit);
     timeLayout->addStretch();
     leftLayout->addLayout(timeLayout);
-    
+
     notesEdit = new QTextEdit();
     notesEdit->setPlaceholderText("Describe your sleep quality, how you felt, any disturbances, dreams, etc...");
     leftLayout->addWidget(notesEdit);
-    
+
     // Buttons
     QHBoxLayout* buttonLayout = new QHBoxLayout();
     saveButton = new QPushButton("Save Entry");
     saveButton->setStyleSheet("background-color: #4CAF50; color: white; padding: 8px; font-weight: bold;");
     clearButton = new QPushButton("Clear");
     clearButton->setStyleSheet("padding: 8px;");
-    
+
     buttonLayout->addWidget(saveButton);
     buttonLayout->addWidget(clearButton);
     leftLayout->addLayout(buttonLayout);
-    
+
     // Right Panel - Symptoms
     QVBoxLayout* rightLayout = new QVBoxLayout();
     QLabel* symptomsLabel = new QLabel("Symptoms/Factors:");
     symptomsLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
     rightLayout->addWidget(symptomsLabel);
-    
-    symptomsList = new QListWidget();
-    rightLayout->addWidget(symptomsList);
-    
-    // Add new symptom
-    QHBoxLayout* addSymptomLayout = new QHBoxLayout();
-    newSymptomEdit = new QLineEdit();
-    newSymptomEdit->setPlaceholderText("New symptom/factor");
-    addSymptomButton = new QPushButton("Add");
-    addSymptomLayout->addWidget(newSymptomEdit);
-    addSymptomLayout->addWidget(addSymptomButton);
-    rightLayout->addLayout(addSymptomLayout);
-    
+
+    // Scrollable area for symptoms
+    symptomsScrollArea = new QScrollArea();
+    symptomsScrollArea->setWidgetResizable(true);
+    symptomsScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+    symptomsContainer = new QWidget();
+    symptomsLayout = new QVBoxLayout(symptomsContainer);
+    symptomsLayout->setAlignment(Qt::AlignTop);
+
+    symptomsScrollArea->setWidget(symptomsContainer);
+    rightLayout->addWidget(symptomsScrollArea);
+
+    // Add new symptom button
+    addSymptomButton = new QPushButton("Add New Symptom...");
+    addSymptomButton->setStyleSheet("padding: 6px;");
+    rightLayout->addWidget(addSymptomButton);
+
     // Add panels to main layout
     mainLayout->addLayout(leftLayout, 2);
     mainLayout->addLayout(rightLayout, 1);
-    
+
     // Connect signals
     connect(saveButton, &QPushButton::clicked, this, &MainWindow::onSaveEntry);
     connect(clearButton, &QPushButton::clicked, this, &MainWindow::onClearForm);
     connect(addSymptomButton, &QPushButton::clicked, this, &MainWindow::onAddSymptom);
-    connect(newSymptomEdit, &QLineEdit::returnPressed, this, &MainWindow::onAddSymptom);
-    
-    // Default symptoms
-    defaultSymptoms << "Insomnia" << "Snoring" << "Nightmares" << "Restless"
-                    << "Tired upon waking" << "Difficulty falling asleep"
-                    << "Woke up during night" << "Sleep apnea symptoms"
-                    << "Stress/Anxiety" << "Caffeine before bed"
-                    << "Alcohol consumption" << "Exercise during day"
-                    << "Screen time before bed" << "Room too hot/cold";
 }
 
 void MainWindow::loadSymptoms() {
-    symptomsList->clear();
-    
+    symptoms.clear();
+
     QFile file("symptoms.txt");
-    QStringList symptoms;
-    
+
     if (file.exists() && file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         QTextStream in(&file);
         while (!in.atEnd()) {
             QString line = in.readLine().trimmed();
             if (!line.isEmpty()) {
-                symptoms << line;
+                Symptom s = Symptom::deserialize(line);
+                symptoms.append(s);
             }
         }
         file.close();
     }
-    
-    // Use default if file doesn't exist or is empty
+
+    // Add defaults if empty
     if (symptoms.isEmpty()) {
-        symptoms = defaultSymptoms;
-    }
-    
-    // Add as checkable items
-    for (const QString& symptom : symptoms) {
-        QListWidgetItem* item = new QListWidgetItem(symptom, symptomsList);
-        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-        item->setCheckState(Qt::Unchecked);
+        symptoms.append(Symptom("Insomnia", SymptomType::Binary));
+        symptoms.append(Symptom("Snoring", SymptomType::Binary));
+        symptoms.append(Symptom("Nightmares", SymptomType::Binary));
+        symptoms.append(Symptom("Restless", SymptomType::Binary));
+        symptoms.append(Symptom("Tired upon waking", SymptomType::Binary));
+        symptoms.append(Symptom("Difficulty falling asleep", SymptomType::Binary));
+        symptoms.append(Symptom("Woke up during night", SymptomType::Count, "times"));
+        symptoms.append(Symptom("Sleep apnea symptoms", SymptomType::Binary));
+        symptoms.append(Symptom("Stress/Anxiety", SymptomType::Binary));
+        symptoms.append(Symptom("Caffeine before bed", SymptomType::Quantity, "mg"));
+        symptoms.append(Symptom("Alcohol consumption", SymptomType::Quantity, "drinks"));
+        symptoms.append(Symptom("Exercise during day", SymptomType::Binary));
+        symptoms.append(Symptom("Screen time before bed", SymptomType::Quantity, "hours"));
+        symptoms.append(Symptom("Room too hot/cold", SymptomType::Binary));
     }
 }
 
@@ -134,35 +137,93 @@ void MainWindow::saveSymptoms() {
     QFile file("symptoms.txt");
     if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         QTextStream out(&file);
-        for (int i = 0; i < symptomsList->count(); ++i) {
-            out << symptomsList->item(i)->text() << "\n";
+        for (const Symptom& s : symptoms) {
+            out << s.serialize() << "\n";
         }
         file.close();
     }
 }
 
-void MainWindow::onAddSymptom() {
-    QString newSymptom = newSymptomEdit->text().trimmed();
-    if (!newSymptom.isEmpty()) {
-        // Check if it already exists
-        bool exists = false;
-        for (int i = 0; i < symptomsList->count(); ++i) {
-            if (symptomsList->item(i)->text() == newSymptom) {
-                exists = true;
-                break;
+void MainWindow::rebuildSymptomWidgets() {
+    // Clear existing widgets
+    qDeleteAll(symptomWidgets);
+    symptomWidgets.clear();
+
+    // Create new widgets
+    for (const Symptom& s : symptoms) {
+        SymptomWidget* widget = new SymptomWidget(s);
+        symptomWidgets.append(widget);
+        symptomsLayout->addWidget(widget);
+    }
+
+    symptomsLayout->addStretch();
+}
+
+void MainWindow::showAddSymptomDialog() {
+    QDialog dialog(this);
+    dialog.setWindowTitle("Add New Symptom");
+    dialog.setModal(true);
+
+    QVBoxLayout* layout = new QVBoxLayout(&dialog);
+
+    // Name
+    layout->addWidget(new QLabel("Symptom Name:"));
+    QLineEdit* nameEdit = new QLineEdit();
+    layout->addWidget(nameEdit);
+
+    // Type
+    layout->addWidget(new QLabel("Type:"));
+    QComboBox* typeCombo = new QComboBox();
+    typeCombo->addItem("Yes/No (Binary)", QVariant::fromValue(SymptomType::Binary));
+    typeCombo->addItem("Count (e.g., times woke up)", QVariant::fromValue(SymptomType::Count));
+    typeCombo->addItem("Quantity (e.g., drinks, mg)", QVariant::fromValue(SymptomType::Quantity));
+    layout->addWidget(typeCombo);
+
+    // Unit
+    layout->addWidget(new QLabel("Unit (optional, for Count/Quantity):"));
+    QLineEdit* unitEdit = new QLineEdit();
+    unitEdit->setPlaceholderText("e.g., times, drinks, mg, hours");
+    layout->addWidget(unitEdit);
+
+    // Buttons
+    QHBoxLayout* buttonLayout = new QHBoxLayout();
+    QPushButton* okButton = new QPushButton("Add");
+    QPushButton* cancelButton = new QPushButton("Cancel");
+    buttonLayout->addWidget(okButton);
+    buttonLayout->addWidget(cancelButton);
+    layout->addLayout(buttonLayout);
+
+    connect(okButton, &QPushButton::clicked, &dialog, &QDialog::accept);
+    connect(cancelButton, &QPushButton::clicked, &dialog, &QDialog::reject);
+
+    if (dialog.exec() == QDialog::Accepted) {
+        QString name = nameEdit->text().trimmed();
+        if (!name.isEmpty()) {
+            SymptomType type = typeCombo->currentData().value<SymptomType>();
+            QString unit = unitEdit->text().trimmed();
+
+            // Check if already exists
+            bool exists = false;
+            for (const Symptom& s : symptoms) {
+                if (s.getName() == name) {
+                    exists = true;
+                    break;
+                }
+            }
+
+            if (!exists) {
+                symptoms.append(Symptom(name, type, unit));
+                saveSymptoms();
+                rebuildSymptomWidgets();
+            } else {
+                QMessageBox::information(this, "Duplicate", "This symptom already exists.");
             }
         }
-        
-        if (!exists) {
-            QListWidgetItem* item = new QListWidgetItem(newSymptom, symptomsList);
-            item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-            item->setCheckState(Qt::Unchecked);
-            newSymptomEdit->clear();
-            saveSymptoms();
-        } else {
-            QMessageBox::information(this, "Duplicate", "This symptom already exists in the list.");
-        }
     }
+}
+
+void MainWindow::onAddSymptom() {
+    showAddSymptomDialog();
 }
 
 void MainWindow::onClearForm() {
@@ -170,14 +231,13 @@ void MainWindow::onClearForm() {
     dateEdit->setDate(QDate::currentDate());
     bedtimeEdit->setTime(QTime(22, 0));
     wakeupEdit->setTime(QTime(7, 0));
-    
-    for (int i = 0; i < symptomsList->count(); ++i) {
-        symptomsList->item(i)->setCheckState(Qt::Unchecked);
+
+    for (SymptomWidget* widget : symptomWidgets) {
+        widget->reset();
     }
 }
 
 QString MainWindow::getCurrentDataDirectory() {
-    // For now, using "default" user - we'll add login system next
     QString dataDir = "sleep_data/default";
     QDir dir;
     if (!dir.exists(dataDir)) {
@@ -186,59 +246,105 @@ QString MainWindow::getCurrentDataDirectory() {
     return dataDir;
 }
 
+QString MainWindow::getSymptomDataFile() {
+    QString dataDir = getCurrentDataDirectory();
+    return QString("%1/symptom_history.csv").arg(dataDir);
+}
+
 bool MainWindow::saveEntry(const QString& username) {
     QString dataDir = getCurrentDataDirectory();
-    
-    // Create filename with date
+
     QString filename = QString("%1/sleep_%2.csv")
                           .arg(dataDir)
                           .arg(dateEdit->date().toString("yyyy-MM-dd"));
-    
-    // Check if file exists to determine if we need header
+
     bool fileExists = QFile::exists(filename);
-    
+
     QFile file(filename);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
         QMessageBox::critical(this, "Error", "Could not save entry!");
         return false;
     }
-    
+
     QTextStream out(&file);
-    
-    // Write header if new file
+
     if (!fileExists) {
         out << "timestamp,date,bedtime,waketime,sleep_duration_hours,notes,symptoms\n";
     }
-    
-    // Calculate sleep duration
+
     QDateTime bedDateTime(dateEdit->date(), bedtimeEdit->time());
     QDateTime wakeDateTime(dateEdit->date().addDays(1), wakeupEdit->time());
     if (wakeupEdit->time() > bedtimeEdit->time()) {
         wakeDateTime = QDateTime(dateEdit->date(), wakeupEdit->time());
     }
     double hours = bedDateTime.secsTo(wakeDateTime) / 3600.0;
-    
-    // Collect checked symptoms
-    QStringList checkedSymptoms;
-    for (int i = 0; i < symptomsList->count(); ++i) {
-        if (symptomsList->item(i)->checkState() == Qt::Checked) {
-            checkedSymptoms << symptomsList->item(i)->text();
+
+    QStringList symptomStrings;
+    for (SymptomWidget* widget : symptomWidgets) {
+        Symptom s = widget->getSymptom();
+        if (s.isPresent()) {
+            if (s.getType() == SymptomType::Binary) {
+                symptomStrings << s.getName();
+            } else {
+                symptomStrings << QString("%1:%2%3")
+                    .arg(s.getName())
+                    .arg(s.getValue())
+                    .arg(s.getUnit().isEmpty() ? "" : " " + s.getUnit());
+            }
         }
     }
-    
-    // Prepare notes (escape quotes and newlines)
+
     QString notes = notesEdit->toPlainText();
     notes.replace("\"", "\"\"");
     notes.replace("\n", " ");
-    
-    // Write entry
+
     out << QDateTime::currentDateTime().toString(Qt::ISODate) << ","
         << dateEdit->date().toString("yyyy-MM-dd") << ","
         << bedtimeEdit->time().toString("HH:mm") << ","
         << wakeupEdit->time().toString("HH:mm") << ","
         << QString::number(hours, 'f', 2) << ","
         << "\"" << notes << "\","
-        << "\"" << checkedSymptoms.join(";") << "\"\n";
+        << "\"" << symptomStrings.join("; ") << "\"\n";
+
+    file.close();
+
+    return saveSummaryEntry(username);
+}
+
+bool MainWindow::saveSummaryEntry(const QString& username) {
+    QString symptomFile = getSymptomDataFile();
+    bool fileExists = QFile::exists(symptomFile);
+
+    QFile file(symptomFile);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+        return false;
+    }
+
+    QTextStream out(&file);
+
+    if (!fileExists) {
+        out << "date,sleep_duration_hours";
+        for (const Symptom& s : symptoms) {
+            out << "," << s.getColumnName();
+        }
+        out << "\n";
+    }
+
+    QDateTime bedDateTime(dateEdit->date(), bedtimeEdit->time());
+    QDateTime wakeDateTime(dateEdit->date().addDays(1), wakeupEdit->time());
+    if (wakeupEdit->time() > bedtimeEdit->time()) {
+        wakeDateTime = QDateTime(dateEdit->date(), wakeupEdit->time());
+    }
+    double hours = bedDateTime.secsTo(wakeDateTime) / 3600.0;
+
+    out << dateEdit->date().toString("yyyy-MM-dd") << ","
+        << QString::number(hours, 'f', 2);
+
+    for (SymptomWidget* widget : symptomWidgets) {
+        Symptom s = widget->getSymptom();
+        out << "," << QString::number(s.getValue(), 'f', 1);
+    }
+    out << "\n";
     
     file.close();
     return true;
