@@ -1,3 +1,4 @@
+//created by drmrsthemonarch with ai effort
 #include "logindialog.h"
 #include "usermanager.h"
 #include <QVBoxLayout>

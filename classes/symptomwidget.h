@@ -1,9 +1,8 @@
+//created by drmrsthemonarch with ai effort
 #ifndef SYMPTOMWIDGET_H
 #define SYMPTOMWIDGET_H
 
-#include <QWidget>
 #include <QCheckBox>
-#include <QSpinBox>
 #include <QDoubleSpinBox>
 #include <QLabel>
 #include <QHBoxLayout>

@@ -1,3 +1,4 @@
+//created by drmrsthemonarch with ai effort
 #ifndef USERMANAGER_H
 #define USERMANAGER_H
 

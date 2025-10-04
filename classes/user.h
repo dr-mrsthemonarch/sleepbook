@@ -1,7 +1,6 @@
+//created by drmrsthemonarch with ai effort
 #ifndef USER_H
 #define USER_H
-
-#include <QString>
 #include <QDateTime>
 
 class User {

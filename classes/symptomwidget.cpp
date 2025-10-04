@@ -1,3 +1,4 @@
+//created by drmrsthemonarch with ai effort
 #include "symptomwidget.h"
 
 SymptomWidget::SymptomWidget(const Symptom& symptom, QWidget* parent)

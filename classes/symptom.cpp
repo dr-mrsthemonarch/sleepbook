@@ -1,3 +1,4 @@
+//created by drmrsthemonarch with ai effort
 #include "symptom.h"
 #include <QStringList>
 

@@ -1,3 +1,4 @@
+//created by drmrsthemonarch with ai effort
 #include "user.h"
 #include <QCryptographicHash>
 #include <QStringList>

@@ -1,3 +1,4 @@
+//created by drmrsthemonarch with ai effort
 #ifndef LOGINDIALOG_H
 #define LOGINDIALOG_H
 

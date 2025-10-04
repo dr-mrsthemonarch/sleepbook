@@ -224,20 +224,12 @@ void MainWindow::loadSymptoms() {
 
     // Add defaults if empty
     if (symptoms.isEmpty()) {
-        symptoms.append(Symptom("Insomnia", SymptomType::Binary));
-        symptoms.append(Symptom("Snoring", SymptomType::Binary));
-        symptoms.append(Symptom("Nightmares", SymptomType::Binary));
-        symptoms.append(Symptom("Restless", SymptomType::Binary));
         symptoms.append(Symptom("Tired upon waking", SymptomType::Binary));
         symptoms.append(Symptom("Difficulty falling asleep", SymptomType::Binary));
         symptoms.append(Symptom("Woke up during night", SymptomType::Count, "times"));
-        symptoms.append(Symptom("Sleep apnea symptoms", SymptomType::Binary));
-        symptoms.append(Symptom("Stress/Anxiety", SymptomType::Binary));
         symptoms.append(Symptom("Caffeine before bed", SymptomType::Quantity, "mg"));
         symptoms.append(Symptom("Alcohol consumption", SymptomType::Quantity, "drinks"));
-        symptoms.append(Symptom("Exercise during day", SymptomType::Binary));
         symptoms.append(Symptom("Screen time before bed", SymptomType::Quantity, "hours"));
-        symptoms.append(Symptom("Room too hot/cold", SymptomType::Binary));
     }
 }
 

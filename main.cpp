@@ -1,9 +1,7 @@
+//created by drmrsthemonarch with ai effort
 #include "classes/mainwindow.h"
 #include "classes/logindialog.h"
-#include "classes/usermanager.h"
 #include <QApplication>
-
-#include "classes/logindialog.h"
 
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
