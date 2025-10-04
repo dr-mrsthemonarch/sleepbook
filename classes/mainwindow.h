@@ -22,6 +22,7 @@
 #include <QComboBox>
 #include "symptom.h"
 #include "symptomwidget.h"
+#include "usermanager.h"
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -34,6 +35,8 @@ private slots:
     void onSaveEntry();
     void onAddSymptom();
     void onClearForm();
+    void onLogout();
+    void onUserChanged();
 
 private:
     void setupUI();
@@ -45,6 +48,8 @@ private:
     QString getCurrentDataDirectory();
     QString getSymptomDataFile();
     void showAddSymptomDialog();
+    void updateWindowTitle();
+    void createUserToolbar();
 
     // UI Components
     QTextEdit* notesEdit;
@@ -57,6 +62,11 @@ private:
     QPushButton* saveButton;
     QPushButton* clearButton;
     QPushButton* addSymptomButton;
+
+    // User toolbar
+    QToolBar* userToolbar;
+    QLabel* userLabel;
+    QPushButton* logoutButton;
 
     QList<Symptom> symptoms;
     QList<SymptomWidget*> symptomWidgets;

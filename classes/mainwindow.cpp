@@ -1,10 +1,13 @@
 #include "mainwindow.h"
+#include <QToolBar>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent) {
     setupUI();
+    createUserToolbar();
     loadSymptoms();
     rebuildSymptomWidgets();
+    updateWindowTitle();
 }
 
 MainWindow::~MainWindow() {
@@ -95,6 +98,71 @@ void MainWindow::setupUI() {
     connect(saveButton, &QPushButton::clicked, this, &MainWindow::onSaveEntry);
     connect(clearButton, &QPushButton::clicked, this, &MainWindow::onClearForm);
     connect(addSymptomButton, &QPushButton::clicked, this, &MainWindow::onAddSymptom);
+}
+
+void MainWindow::createUserToolbar() {
+    userToolbar = new QToolBar("User", this);
+    userToolbar->setMovable(false);
+    addToolBar(Qt::TopToolBarArea, userToolbar);
+
+    // User label
+    userLabel = new QLabel();
+    userLabel->setStyleSheet("padding: 5px 10px; font-weight: bold;");
+    userToolbar->addWidget(userLabel);
+
+    userToolbar->addSeparator();
+
+    // Logout button
+    logoutButton = new QPushButton("Logout");
+    logoutButton->setStyleSheet("padding: 5px 15px;");
+    connect(logoutButton, &QPushButton::clicked, this, &MainWindow::onLogout);
+    userToolbar->addWidget(logoutButton);
+
+    // Connect to user manager
+    connect(&UserManager::instance(), &UserManager::userLoggedIn,
+            this, &MainWindow::onUserChanged);
+    connect(&UserManager::instance(), &UserManager::userLoggedOut,
+            this, &MainWindow::onUserChanged);
+
+    onUserChanged();
+}
+
+void MainWindow::updateWindowTitle() {
+    QString title = "Sleep Quality Tracker";
+    if (UserManager::instance().isLoggedIn()) {
+        title += QString(" - %1").arg(UserManager::instance().getCurrentUsername());
+    }
+    setWindowTitle(title);
+}
+
+void MainWindow::onUserChanged() {
+    bool loggedIn = UserManager::instance().isLoggedIn();
+
+    if (loggedIn) {
+        User* user = UserManager::instance().getCurrentUser();
+        QString displayText = user->getDisplayName().isEmpty() ?
+                             user->getUsername() : user->getDisplayName();
+        userLabel->setText(QString("User: %1").arg(displayText));
+        logoutButton->setEnabled(true);
+    } else {
+        userLabel->setText("Not logged in");
+        logoutButton->setEnabled(false);
+    }
+
+    updateWindowTitle();
+}
+
+void MainWindow::onLogout() {
+    QMessageBox::StandardButton reply = QMessageBox::question(
+        this, "Logout",
+        "Are you sure you want to logout?",
+        QMessageBox::Yes | QMessageBox::No
+    );
+
+    if (reply == QMessageBox::Yes) {
+        UserManager::instance().logout();
+        close(); // Close main window, will show login dialog again in main.cpp
+    }
 }
 
 void MainWindow::loadSymptoms() {
@@ -252,6 +320,11 @@ QString MainWindow::getSymptomDataFile() {
 }
 
 bool MainWindow::saveEntry(const QString& username) {
+    if (!UserManager::instance().isLoggedIn()) {
+        QMessageBox::warning(this, "Not Logged In", "Please login to save entries.");
+        return false;
+    }
+
     QString dataDir = getCurrentDataDirectory();
 
     QString filename = QString("%1/sleep_%2.csv")

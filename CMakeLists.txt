@@ -18,12 +18,18 @@ set(SOURCES
         classes/mainwindow.cpp
         classes/symptomwidget.cpp
         classes/symptom.cpp
+        classes/logindialog.cpp
+        classes/usermanager.cpp
+        classes/user.cpp
 )
 
 set(HEADERS
         classes/mainwindow.h
         classes/symptomwidget.h
         classes/symptom.h
+        classes/logindialog.h
+        classes/usermanager.h
+        classes/user.h
 )
 
 # Create executable
