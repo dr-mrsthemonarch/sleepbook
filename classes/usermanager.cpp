@@ -86,7 +86,9 @@ bool UserManager::authenticateUser(const QString& username, const QString& passw
                 // Set as current user
                 delete m_currentUser;
                 m_currentUser = new User(user);
-                
+                // Store the actual password for data encryption (in memory only)
+                m_currentUser->setEncryptionPassword(password);
+
                 emit userLoggedIn(username);
                 return true;
             }

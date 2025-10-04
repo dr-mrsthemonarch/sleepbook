@@ -1,17 +1,27 @@
 #include "mainwindow.h"
 #include <QToolBar>
+#include <QDataStream>
+#include <QBuffer>
+#include "logindialog.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent) {
     setupUI();
     createUserToolbar();
-    loadSymptoms();
-    rebuildSymptomWidgets();
+
+    // Load symptoms only after UI is set up and user is logged in
+    if (UserManager::instance().isLoggedIn()) {
+        loadSymptoms();
+        rebuildSymptomWidgets();
+    }
+
     updateWindowTitle();
 }
 
 MainWindow::~MainWindow() {
-    saveSymptoms();
+    if (UserManager::instance().isLoggedIn()) {
+        saveSymptoms();
+    }
 }
 
 void MainWindow::setupUI() {
@@ -160,26 +170,56 @@ void MainWindow::onLogout() {
     );
 
     if (reply == QMessageBox::Yes) {
+        // Save current data before logging out
+        if (UserManager::instance().isLoggedIn()) {
+            saveSymptoms();
+        }
+
         UserManager::instance().logout();
-        close(); // Close main window, will show login dialog again in main.cpp
+
+        // Show login dialog again
+        LoginDialog loginDialog(this);
+        if (loginDialog.exec() == QDialog::Accepted) {
+            // User logged in successfully, reload data
+            loadSymptoms();
+            rebuildSymptomWidgets();
+            onClearForm();
+            updateWindowTitle();
+        } else {
+            // User cancelled login, close the application
+            close();
+        }
     }
 }
 
 void MainWindow::loadSymptoms() {
     symptoms.clear();
 
-    QFile file("symptoms.txt");
+    if (!UserManager::instance().isLoggedIn()) {
+        return; // Don't load if not logged in
+    }
 
-    if (file.exists() && file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QTextStream in(&file);
-        while (!in.atEnd()) {
-            QString line = in.readLine().trimmed();
-            if (!line.isEmpty()) {
-                Symptom s = Symptom::deserialize(line);
-                symptoms.append(s);
-            }
+    // Load from user-specific encrypted binary file
+    QString userSymptomsFile = getCurrentDataDirectory() + "/symptoms.dat";
+    QString password = UserManager::instance().getCurrentUser()->getEncryptionPassword();
+
+    QByteArray data = DataEncryption::loadEncrypted(userSymptomsFile, password);
+
+    if (!data.isEmpty()) {
+        // Deserialize from binary
+        QDataStream in(&data, QIODevice::ReadOnly);
+        in.setVersion(QDataStream::Qt_5_15);
+
+        qint32 count;
+        in >> count;
+
+        for (qint32 i = 0; i < count; ++i) {
+            QString name, unit, typeStr;
+            in >> name >> typeStr >> unit;
+
+            SymptomType type = Symptom::stringToType(typeStr);
+            symptoms.append(Symptom(name, type, unit));
         }
-        file.close();
     }
 
     // Add defaults if empty
@@ -202,14 +242,26 @@ void MainWindow::loadSymptoms() {
 }
 
 void MainWindow::saveSymptoms() {
-    QFile file("symptoms.txt");
-    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QTextStream out(&file);
-        for (const Symptom& s : symptoms) {
-            out << s.serialize() << "\n";
-        }
-        file.close();
+    if (!UserManager::instance().isLoggedIn()) {
+        return; // Don't save if not logged in
     }
+
+    // Save to user-specific encrypted binary file
+    QString userSymptomsFile = getCurrentDataDirectory() + "/symptoms.dat";
+    QString password = UserManager::instance().getCurrentUser()->getEncryptionPassword();
+
+    // Serialize to binary
+    QByteArray data;
+    QDataStream out(&data, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_5_15);
+
+    out << static_cast<qint32>(symptoms.size());
+
+    for (const Symptom& s : symptoms) {
+        out << s.getName() << Symptom::typeToString(s.getType()) << s.getUnit();
+    }
+
+    DataEncryption::saveEncrypted(userSymptomsFile, data, password);
 }
 
 void MainWindow::rebuildSymptomWidgets() {
@@ -306,7 +358,16 @@ void MainWindow::onClearForm() {
 }
 
 QString MainWindow::getCurrentDataDirectory() {
-    QString dataDir = "sleep_data/default";
+    QString username = "default";
+
+    if (UserManager::instance().isLoggedIn()) {
+        User* user = UserManager::instance().getCurrentUser();
+        if (user) {
+            username = user->getUsername();
+        }
+    }
+
+    QString dataDir = QString("sleep_data/%1").arg(username);
     QDir dir;
     if (!dir.exists(dataDir)) {
         dir.mkpath(dataDir);
@@ -316,35 +377,24 @@ QString MainWindow::getCurrentDataDirectory() {
 
 QString MainWindow::getSymptomDataFile() {
     QString dataDir = getCurrentDataDirectory();
-    return QString("%1/symptom_history.csv").arg(dataDir);
+    return QString("%1/symptom_history.dat").arg(dataDir);
 }
 
-bool MainWindow::saveEntry(const QString& username) {
+bool MainWindow::saveEntry() {
     if (!UserManager::instance().isLoggedIn()) {
         QMessageBox::warning(this, "Not Logged In", "Please login to save entries.");
         return false;
     }
 
     QString dataDir = getCurrentDataDirectory();
+    QString password = UserManager::instance().getCurrentUser()->getEncryptionPassword();
 
-    QString filename = QString("%1/sleep_%2.csv")
+    // Create filename with date
+    QString filename = QString("%1/sleep_%2.dat")
                           .arg(dataDir)
                           .arg(dateEdit->date().toString("yyyy-MM-dd"));
 
-    bool fileExists = QFile::exists(filename);
-
-    QFile file(filename);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
-        QMessageBox::critical(this, "Error", "Could not save entry!");
-        return false;
-    }
-
-    QTextStream out(&file);
-
-    if (!fileExists) {
-        out << "timestamp,date,bedtime,waketime,sleep_duration_hours,notes,symptoms\n";
-    }
-
+    // Calculate sleep duration
     QDateTime bedDateTime(dateEdit->date(), bedtimeEdit->time());
     QDateTime wakeDateTime(dateEdit->date().addDays(1), wakeupEdit->time());
     if (wakeupEdit->time() > bedtimeEdit->time()) {
@@ -352,57 +402,53 @@ bool MainWindow::saveEntry(const QString& username) {
     }
     double hours = bedDateTime.secsTo(wakeDateTime) / 3600.0;
 
-    QStringList symptomStrings;
+    // Collect symptom data
+    QList<QPair<QString, double>> symptomData;
     for (SymptomWidget* widget : symptomWidgets) {
         Symptom s = widget->getSymptom();
         if (s.isPresent()) {
-            if (s.getType() == SymptomType::Binary) {
-                symptomStrings << s.getName();
-            } else {
-                symptomStrings << QString("%1:%2%3")
-                    .arg(s.getName())
-                    .arg(s.getValue())
-                    .arg(s.getUnit().isEmpty() ? "" : " " + s.getUnit());
-            }
+            symptomData.append(qMakePair(s.getName(), s.getValue()));
         }
     }
 
     QString notes = notesEdit->toPlainText();
-    notes.replace("\"", "\"\"");
-    notes.replace("\n", " ");
 
-    out << QDateTime::currentDateTime().toString(Qt::ISODate) << ","
-        << dateEdit->date().toString("yyyy-MM-dd") << ","
-        << bedtimeEdit->time().toString("HH:mm") << ","
-        << wakeupEdit->time().toString("HH:mm") << ","
-        << QString::number(hours, 'f', 2) << ","
-        << "\"" << notes << "\","
-        << "\"" << symptomStrings.join("; ") << "\"\n";
+    // Serialize to binary
+    QByteArray data;
+    QDataStream out(&data, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_5_15);
 
-    file.close();
+    out << QDateTime::currentDateTime()
+        << dateEdit->date()
+        << bedtimeEdit->time()
+        << wakeupEdit->time()
+        << hours
+        << notes
+        << symptomData;
 
-    return saveSummaryEntry(username);
-}
-
-bool MainWindow::saveSummaryEntry(const QString& username) {
-    QString symptomFile = getSymptomDataFile();
-    bool fileExists = QFile::exists(symptomFile);
-
-    QFile file(symptomFile);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+    if (!DataEncryption::saveEncrypted(filename, data, password)) {
+        QMessageBox::critical(this, "Error", "Could not save entry!");
         return false;
     }
 
-    QTextStream out(&file);
+    return saveSummaryEntry();
+}
 
-    if (!fileExists) {
-        out << "date,sleep_duration_hours";
-        for (const Symptom& s : symptoms) {
-            out << "," << s.getColumnName();
-        }
-        out << "\n";
+bool MainWindow::saveSummaryEntry() {
+    QString symptomFile = getSymptomDataFile();
+    QString password = UserManager::instance().getCurrentUser()->getEncryptionPassword();
+
+    // Load existing data
+    QList<QVariantMap> entries;
+    QByteArray existingData = DataEncryption::loadEncrypted(symptomFile, password);
+
+    if (!existingData.isEmpty()) {
+        QDataStream in(&existingData, QIODevice::ReadOnly);
+        in.setVersion(QDataStream::Qt_5_15);
+        in >> entries;
     }
 
+    // Calculate sleep duration
     QDateTime bedDateTime(dateEdit->date(), bedtimeEdit->time());
     QDateTime wakeDateTime(dateEdit->date().addDays(1), wakeupEdit->time());
     if (wakeupEdit->time() > bedtimeEdit->time()) {
@@ -410,21 +456,30 @@ bool MainWindow::saveSummaryEntry(const QString& username) {
     }
     double hours = bedDateTime.secsTo(wakeDateTime) / 3600.0;
 
-    out << dateEdit->date().toString("yyyy-MM-dd") << ","
-        << QString::number(hours, 'f', 2);
+    // Create new entry
+    QVariantMap entry;
+    entry["date"] = dateEdit->date();
+    entry["sleep_duration"] = hours;
 
+    // Add symptom values
     for (SymptomWidget* widget : symptomWidgets) {
         Symptom s = widget->getSymptom();
-        out << "," << QString::number(s.getValue(), 'f', 1);
+        entry[s.getName()] = s.getValue();
     }
-    out << "\n";
-    
-    file.close();
-    return true;
+
+    entries.append(entry);
+
+    // Serialize and save
+    QByteArray data;
+    QDataStream out(&data, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_5_15);
+    out << entries;
+
+    return DataEncryption::saveEncrypted(symptomFile, data, password);
 }
 
 void MainWindow::onSaveEntry() {
-    if (saveEntry("default")) {
+    if (saveEntry()) {
         QMessageBox::information(this, "Success", "Sleep entry saved successfully!");
         onClearForm();
     }

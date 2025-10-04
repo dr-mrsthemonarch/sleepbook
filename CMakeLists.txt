@@ -21,6 +21,7 @@ set(SOURCES
         classes/logindialog.cpp
         classes/usermanager.cpp
         classes/user.cpp
+        classes/dataencryption.cpp
 )
 
 set(HEADERS
@@ -30,6 +31,7 @@ set(HEADERS
         classes/logindialog.h
         classes/usermanager.h
         classes/user.h
+        classes/dataencryption.h
 )
 
 # Create executable

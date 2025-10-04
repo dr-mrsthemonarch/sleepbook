@@ -23,6 +23,7 @@
 #include "symptom.h"
 #include "symptomwidget.h"
 #include "usermanager.h"
+#include "dataencryption.h"
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -43,8 +44,8 @@ private:
     void loadSymptoms();
     void saveSymptoms();
     void rebuildSymptomWidgets();
-    bool saveEntry(const QString& username);
-    bool saveSummaryEntry(const QString& username);
+    bool saveEntry();
+    bool saveSummaryEntry();
     QString getCurrentDataDirectory();
     QString getSymptomDataFile();
     void showAddSymptomDialog();
