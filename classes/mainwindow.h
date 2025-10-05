@@ -26,6 +26,7 @@
 #include <QListWidget>
 #include <QDateEdit>
 #include <QCheckBox>
+#include <QPointer>
 #include "symptom.h"
 #include "symptomwidget.h"
 #include "usermanager.h"
@@ -77,8 +78,6 @@ private:
     void plotHistogramOverlay(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms);
     void plotHistogramStacked(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms);
     void plotCorrelationData(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms);
-    void resetPlotSafely();
-    QList<QCPAxis*> synchronizedXAxes;
 
     // UI Components
     QTabWidget* tabWidget;
@@ -122,6 +121,7 @@ private:
 
     QList<Symptom> symptoms;
     QList<SymptomWidget*> symptomWidgets;
+    QVector<QPointer<QCPAxis>> synchronizedXAxes;
 };
 
 #endif // MAINWINDOW_H

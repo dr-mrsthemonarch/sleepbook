@@ -762,119 +762,101 @@ void MainWindow::plotHistogramData(const QList<QVariantMap>& entries, const QStr
 }
 
 void MainWindow::plotHistogramOverlay(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms) {
+    // --- SAFE CLEANUP BEFORE REBUILD ---
+    for (QPointer<QCPAxis> xAxis : qAsConst(synchronizedXAxes)) {
+        if (xAxis)
+            QObject::disconnect(xAxis, nullptr, this, nullptr);
+    }
+    synchronizedXAxes.clear();
+
     customPlot->clearGraphs();
     customPlot->clearPlottables();
 
+    // ✅ FIX: Recreate plot layout if it was cleared by stacked mode
+    if (customPlot->plotLayout()->elementCount() == 0) {
+        customPlot->plotLayout()->simplify();  // Reset to default layout
+        QCPAxisRect* axisRect = new QCPAxisRect(customPlot);
+        customPlot->plotLayout()->addElement(0, 0, axisRect);
+
+        // Reassign axis pointers to the new axis rect
+        customPlot->setCurrentLayer("main");
+    }
+
     // Color palette
     QVector<QColor> colors = {
-        QColor(33, 150, 243, 150),   // Blue (semi-transparent)
-        QColor(76, 175, 80, 150),    // Green
-        QColor(255, 152, 0, 150),    // Orange
-        QColor(156, 39, 176, 150),   // Purple
-        QColor(244, 67, 54, 150),    // Red
-        QColor(0, 188, 212, 150),    // Cyan
+        QColor(33, 150, 243, 150), QColor(76, 175, 80, 150),
+        QColor(255, 152, 0, 150), QColor(156, 39, 176, 150),
+        QColor(244, 67, 54, 150), QColor(0, 188, 212, 150)
     };
 
     // Organize data by date
-    QMap<QDate, QMap<QString, double>> dateData; // date -> symptom -> value
-
-    // First pass: collect all data organized by date
+    QMap<QDate, QMap<QString, double>> dateData;
     for (const auto& entry : entries) {
         QDate date = QDate::fromString(entry["date"].toString(), Qt::ISODate);
         if (!date.isValid()) continue;
 
-        // Initialize all symptoms to 0 for this date
-        for (const QString& symptom : selectedSymptoms) {
-            if (!dateData[date].contains(symptom)) {
-                dateData[date][symptom] = 0.0;
-            }
-        }
+        for (const QString& symptom : selectedSymptoms)
+            dateData[date].insert(symptom, 0.0);
 
-        // Fill in actual values
         for (const QString& symptomName : selectedSymptoms) {
             if (symptomName == "Sleep Duration") {
                 dateData[date][symptomName] = entry["sleep_duration"].toDouble();
-            } else {
-                // For regular symptoms, count occurrences (1 if present)
-                if (entry.contains(symptomName) && entry[symptomName].toBool()) {
-                    dateData[date][symptomName] += 1.0;
-                }
+            } else if (entry.contains(symptomName) && entry[symptomName].toBool()) {
+                dateData[date][symptomName] += 1.0;
             }
         }
     }
 
-    // Get sorted list of dates
     QList<QDate> dates = dateData.keys();
     std::sort(dates.begin(), dates.end());
-
     if (dates.isEmpty()) {
         customPlot->replot();
         return;
     }
 
-    // Convert dates to numbers for plotting (QCP uses double for coordinates)
     QVector<double> dateNumbers;
-    for (const QDate& date : dates) {
-        QDateTime dateTime(date);
-        dateNumbers.append(dateTime.toMSecsSinceEpoch() / 1000.0); // Convert to seconds
-    }
+    for (const QDate& date : dates)
+        dateNumbers.append(QDateTime(date).toMSecsSinceEpoch() / 1000.0);
 
-    // Calculate bar width based on date range
     double totalSeconds = dateNumbers.last() - dateNumbers.first();
     double barWidth = totalSeconds / (dates.size() * selectedSymptoms.size() * 1.5);
-
     double maxValue = 0;
 
-    // Create bars for each symptom
-    for (int symptomIdx = 0; symptomIdx < selectedSymptoms.size(); ++symptomIdx) {
-        QString symptomName = selectedSymptoms[symptomIdx];
+    for (int i = 0; i < selectedSymptoms.size(); ++i) {
+        const QString& symptom = selectedSymptoms[i];
         QVector<double> values;
-
-        // Extract values for this symptom across all dates
         for (const QDate& date : dates) {
-            double value = dateData[date].value(symptomName, 0.0);
-            values.append(value);
-            maxValue = std::max(maxValue, value);
+            double val = dateData[date].value(symptom, 0.0);
+            values.append(val);
+            maxValue = std::max(maxValue, val);
         }
 
-        // Create bar chart for this symptom
         QCPBars* bars = new QCPBars(customPlot->xAxis, customPlot->yAxis);
+        QVector<double> offsetDates;
+        double offset = (i - (selectedSymptoms.size() - 1) / 2.0) * barWidth * 0.8;
+        for (double d : dateNumbers)
+            offsetDates.append(d + offset);
 
-        // Apply slight offset for each symptom series to avoid overlap
-        QVector<double> offsetDateNumbers;
-        double offset = (symptomIdx - (selectedSymptoms.size() - 1) / 2.0) * barWidth * 0.8;
-        for (double dateNum : dateNumbers) {
-            offsetDateNumbers.append(dateNum + offset);
-        }
-
-        bars->setData(offsetDateNumbers, values);
-
-        // Style the bars
-        QColor color = colors[symptomIdx % colors.size()];
+        bars->setData(offsetDates, values);
+        QColor color = colors[i % colors.size()];
         bars->setPen(QPen(color.darker(), 1));
         bars->setBrush(color);
         bars->setWidth(barWidth);
-        bars->setName(symptomName);
+        bars->setName(symptom);
     }
 
-    // Set up axes
     customPlot->xAxis->setLabel("Date");
-    customPlot->yAxis->setLabel(selectedSymptoms.contains("Sleep Duration") ?
-                               "Value (Count/Hours)" : "Symptom Count");
+    customPlot->yAxis->setLabel(selectedSymptoms.contains("Sleep Duration")
+        ? "Value (Count/Hours)" : "Symptom Count");
 
-    // Set x-axis range with buffer
     double xBuffer = (dateNumbers.last() - dateNumbers.first()) * 0.05;
     customPlot->xAxis->setRange(dateNumbers.first() - xBuffer, dateNumbers.last() + xBuffer);
-
-    // Set y-axis range
     customPlot->yAxis->setRange(0, maxValue * 1.1);
 
-    // Configure x-axis to show dates
     QSharedPointer<QCPAxisTickerDateTime> dateTicker(new QCPAxisTickerDateTime);
     dateTicker->setDateTimeFormat("MMM d\nyyyy");
     customPlot->xAxis->setTicker(dateTicker);
 
-    // Legend and interactions
     customPlot->legend->setVisible(true);
     customPlot->legend->setBrush(QBrush(QColor(255, 255, 255, 200)));
     customPlot->axisRect()->insetLayout()->setInsetAlignment(0, Qt::AlignTop | Qt::AlignRight);
@@ -884,177 +866,164 @@ void MainWindow::plotHistogramOverlay(const QList<QVariantMap>& entries, const Q
 }
 
 void MainWindow::plotHistogramStacked(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms) {
-    customPlot->setNoAntialiasingOnDrag(true);
-    customPlot->setNotAntialiasedElements(QCP::aeAll);
+    // --- CRITICAL FIX: Disconnect ALL signals before clearing ---
+    // The crash happens because axes get destroyed but signal connections remain active
+    for (QPointer<QCPAxis> xAxis : qAsConst(synchronizedXAxes)) {
+        if (xAxis) {
+            // Disconnect ALL signals from this axis to prevent dangling connections
+            xAxis->disconnect();
+        }
+    }
+    synchronizedXAxes.clear();
 
+    // Also disconnect the syncXAxes slot from ANY sender that might still be connected
+    disconnect(this, SLOT(syncXAxes()));
+
+    customPlot->setNoAntialiasingOnDrag(true);
     customPlot->clearGraphs();
     customPlot->clearPlottables();
+
+    // Now safe to clear layout since all signal connections are gone
     customPlot->plotLayout()->clear();
 
-    // OPTIMIZATION: Pre-allocate and use more efficient data structures
     QMap<QDate, QMap<QString, double>> dateData;
 
-    // Single optimized pass through entries
     for (const auto& entry : entries) {
         QDate date = entry["date"].toDate();
         if (!date.isValid()) continue;
 
-        // Initialize all symptoms for this date in one go
         auto& dateMap = dateData[date];
-        for (const QString& symptomName : selectedSymptoms) {
-            if (!dateMap.contains(symptomName)) {
-                dateMap[symptomName] = 0.0;
-            }
-        }
+        for (const QString& s : selectedSymptoms)
+            if (!dateMap.contains(s))
+                dateMap[s] = 0.0;
 
-        // Process symptoms - optimized condition checks
-        for (const QString& symptomName : selectedSymptoms) {
-            if (symptomName == "Sleep Duration") {
-                dateMap[symptomName] = entry["sleep_duration"].toDouble();
-            } else if (entry.contains(symptomName)) {
-                // Use direct boolean check instead of toBool() for binary symptoms
-                QVariant value = entry[symptomName];
+        for (const QString& s : selectedSymptoms) {
+            if (s == "Sleep Duration") {
+                dateMap[s] = entry["sleep_duration"].toDouble();
+            } else if (entry.contains(s)) {
+                QVariant value = entry[s];
                 if (value.type() == QVariant::Bool) {
-                    if (value.toBool()) {
-                        dateMap[symptomName] += 1.0;
-                    }
-                } else {
-                    dateMap[symptomName] += value.toDouble();
-                }
+                    if (value.toBool()) dateMap[s] += 1.0;
+                } else dateMap[s] += value.toDouble();
             }
         }
     }
 
-    // Convert to sorted list more efficiently
     QList<QDate> dates = dateData.keys();
     std::sort(dates.begin(), dates.end());
-
     if (dates.isEmpty()) {
         customPlot->replot();
         return;
     }
 
-    // OPTIMIZATION: Pre-calculate all date numbers
     QVector<double> dateNumbers;
-    dateNumbers.reserve(dates.size());
-    for (const QDate& date : dates) {
+    for (const QDate& date : dates)
         dateNumbers.append(date.startOfDay().toMSecsSinceEpoch() / 1000.0);
-    }
 
-    // Calculate ranges once
     double minDate = dateNumbers.first();
     double maxDate = dateNumbers.last();
     double xBuffer = (maxDate - minDate) * 0.05;
     double barWidth = (maxDate - minDate) / (dates.size() * 1.2);
 
-    // OPTIMIZATION: Pre-calculate all values for each symptom
     QVector<QVector<double>> symptomValues(selectedSymptoms.size());
-    QVector<double> maxYValues(selectedSymptoms.size(), 0.0);
+    QVector<double> maxY(selectedSymptoms.size(), 0.0);
 
-    for (int symptomIdx = 0; symptomIdx < selectedSymptoms.size(); ++symptomIdx) {
-        const QString& symptomName = selectedSymptoms[symptomIdx];
-        QVector<double>& values = symptomValues[symptomIdx];
-        values.reserve(dates.size());
-
+    for (int i = 0; i < selectedSymptoms.size(); ++i) {
+        const QString& name = selectedSymptoms[i];
+        QVector<double>& vals = symptomValues[i];
         for (const QDate& date : dates) {
-            double value = dateData[date].value(symptomName, 0.0);
-            values.append(value);
-            maxYValues[symptomIdx] = std::max(maxYValues[symptomIdx], value);
+            double v = dateData[date].value(name, 0.0);
+            vals.append(v);
+            maxY[i] = std::max(maxY[i], v);
         }
     }
 
-    // OPTIMIZATION: Batch axis creation and setup
     int numPlots = selectedSymptoms.size();
-    synchronizedXAxes.clear();
+    synchronizedXAxes.clear();  // Make sure it's clear before we start adding
     synchronizedXAxes.reserve(numPlots);
 
-    for (int idx = 0; idx < numPlots; ++idx) {
+    static QVector<QColor> colors = {
+        QColor(33, 150, 243), QColor(76, 175, 80),
+        QColor(255, 152, 0), QColor(156, 39, 176),
+        QColor(244, 67, 54), QColor(0, 188, 212)
+    };
+
+    for (int i = 0; i < numPlots; ++i) {
         QCPAxisRect* axisRect = new QCPAxisRect(customPlot);
-        customPlot->plotLayout()->addElement(idx, 0, axisRect);
+        customPlot->plotLayout()->addElement(i, 0, axisRect);
 
         QCPAxis* xAxis = axisRect->axis(QCPAxis::atBottom);
         QCPAxis* yAxis = axisRect->axis(QCPAxis::atLeft);
         synchronizedXAxes.append(xAxis);
 
-        // Create bars with pre-calculated data
         QCPBars* bars = new QCPBars(xAxis, yAxis);
-        bars->setData(dateNumbers, symptomValues[idx]);
-
-        // Use simpler styling during initial render
-        static QVector<QColor> colors = {
-            QColor(33, 150, 243), QColor(76, 175, 80), QColor(255, 152, 0),
-            QColor(156, 39, 176), QColor(244, 67, 54), QColor(0, 188, 212)
-        };
-
-        QColor color = colors[idx % colors.size()];
+        bars->setData(dateNumbers, symptomValues[i]);
+        QColor color = colors[i % colors.size()];
         bars->setPen(QPen(color));
         bars->setBrush(QBrush(color));
         bars->setWidth(barWidth);
 
-        // Configure axes efficiently
-        if (idx == numPlots - 1) {
-            QSharedPointer<QCPAxisTickerDateTime> dateTicker(new QCPAxisTickerDateTime);
-            dateTicker->setDateTimeFormat("MMM d");
-            xAxis->setTicker(dateTicker);
+        if (i == numPlots - 1) {
+            QSharedPointer<QCPAxisTickerDateTime> ticker(new QCPAxisTickerDateTime);
+            ticker->setDateTimeFormat("MMM d");
+            xAxis->setTicker(ticker);
             xAxis->setLabel("Date");
         } else {
             xAxis->setTickLabels(false);
         }
 
-        yAxis->setLabel(selectedSymptoms[idx] == "Sleep Duration" ? "Hours" : "Count");
-        yAxis->setRange(0, maxYValues[idx] * 1.1);
+        yAxis->setLabel(selectedSymptoms[i] == "Sleep Duration" ? "Hours" : "Count");
+        yAxis->setRange(0, maxY[i] * 1.1);
         xAxis->setRange(minDate - xBuffer, maxDate + xBuffer);
 
-        // Add simple title
-        QCPTextElement* title = new QCPTextElement(customPlot, selectedSymptoms[idx]);
+        QCPTextElement* title = new QCPTextElement(customPlot, selectedSymptoms[i]);
         axisRect->insetLayout()->addElement(title, Qt::AlignTop | Qt::AlignHCenter);
-
-        axisRect->setRangeDrag(Qt::Horizontal);
-        axisRect->setRangeZoom(Qt::Horizontal);
     }
 
-    // OPTIMIZATION: Connect signals more efficiently
-    for (QCPAxis* xAxis : synchronizedXAxes) {
-        connect(xAxis, QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
-                this, &MainWindow::syncXAxes, Qt::UniqueConnection);
+    // Connect synchronization AFTER all axes are created and added
+    // Use Qt::UniqueConnection to prevent duplicate connections
+    for (int i = 0; i < synchronizedXAxes.size(); ++i) {
+        QPointer<QCPAxis> xAxis = synchronizedXAxes[i];
+        if (xAxis) {
+            // Store the connection so we can properly disconnect it later
+            connect(xAxis, QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
+                    this, &MainWindow::syncXAxes, Qt::UniqueConnection);
+        }
     }
 
-    // Single replot at the end
     customPlot->setNotAntialiasedElements(QCP::aeNone);
     customPlot->replot();
 }
 
 void MainWindow::syncXAxes() {
-    if (synchronizedXAxes.isEmpty()) return;
+    if (synchronizedXAxes.isEmpty())
+        return;
 
     QCPAxis* senderAxis = qobject_cast<QCPAxis*>(sender());
-    if (!senderAxis) return;
+    if (!senderAxis || !customPlot || !customPlot->plotLayout())
+        return;
 
     QCPRange currentRange = senderAxis->range();
 
-    // OPTIMIZATION: Only update if change is significant
     static QCPRange lastRange;
     if (qFuzzyCompare(lastRange.lower, currentRange.lower) &&
-        qFuzzyCompare(lastRange.upper, currentRange.upper)) {
+        qFuzzyCompare(lastRange.upper, currentRange.upper))
         return;
-        }
     lastRange = currentRange;
 
-    // Block signals and disable anti-aliasing
+    bool oldBlock = customPlot->blockSignals(true);
     customPlot->setNotAntialiasedElements(QCP::aeAll);
-    bool oldState = customPlot->blockSignals(true);
 
-    // Update only visible axes
-    for (QCPAxis* xAxis : synchronizedXAxes) {
-        if (xAxis != senderAxis && xAxis->visible() && xAxis->range() != currentRange) {
+    for (QPointer<QCPAxis> xAxis : synchronizedXAxes) {
+        if (!xAxis || xAxis == senderAxis)
+            continue;
+
+        if (xAxis->visible() && xAxis->range() != currentRange)
             xAxis->setRange(currentRange);
-        }
     }
 
-    customPlot->blockSignals(oldState);
+    customPlot->blockSignals(oldBlock);
     customPlot->setNotAntialiasedElements(QCP::aeNone);
-
-    // OPTIMIZATION: Use single replot
     customPlot->replot(QCustomPlot::rpQueuedReplot);
 }
 
