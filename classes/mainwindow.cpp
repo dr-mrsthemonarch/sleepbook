@@ -771,8 +771,6 @@ void MainWindow::plotHistogramOverlay(const QList<QVariantMap>& entries, const Q
 
     customPlot->clearGraphs();
     customPlot->clearPlottables();
-
-    // ✅ FIX: Recreate plot layout if it was cleared by stacked mode
     if (customPlot->plotLayout()->elementCount() == 0) {
         customPlot->plotLayout()->simplify();  // Reset to default layout
         QCPAxisRect* axisRect = new QCPAxisRect(customPlot);
@@ -784,9 +782,12 @@ void MainWindow::plotHistogramOverlay(const QList<QVariantMap>& entries, const Q
 
     // Color palette
     QVector<QColor> colors = {
-        QColor(33, 150, 243, 150), QColor(76, 175, 80, 150),
-        QColor(255, 152, 0, 150), QColor(156, 39, 176, 150),
-        QColor(244, 67, 54, 150), QColor(0, 188, 212, 150)
+        QColor(33, 150, 243, 150),
+        QColor(76, 175, 80, 150),
+        QColor(255, 152, 0, 150),
+        QColor(156, 39, 176, 150),
+        QColor(244, 67, 54, 150),
+        QColor(0, 188, 212, 150)
     };
 
     // Organize data by date
@@ -849,9 +850,9 @@ void MainWindow::plotHistogramOverlay(const QList<QVariantMap>& entries, const Q
     customPlot->yAxis->setLabel(selectedSymptoms.contains("Sleep Duration")
         ? "Value (Count/Hours)" : "Symptom Count");
 
-    double xBuffer = (dateNumbers.last() - dateNumbers.first()) * 0.05;
+    double xBuffer = (dateNumbers.last() - dateNumbers.first()) * 1;
     customPlot->xAxis->setRange(dateNumbers.first() - xBuffer, dateNumbers.last() + xBuffer);
-    customPlot->yAxis->setRange(0, maxValue * 1.1);
+    customPlot->yAxis->setRange(0, maxValue * 1.2);
 
     QSharedPointer<QCPAxisTickerDateTime> dateTicker(new QCPAxisTickerDateTime);
     dateTicker->setDateTimeFormat("MMM d\nyyyy");
@@ -922,7 +923,7 @@ void MainWindow::plotHistogramStacked(const QList<QVariantMap>& entries, const Q
 
     double minDate = dateNumbers.first();
     double maxDate = dateNumbers.last();
-    double xBuffer = (maxDate - minDate) * 0.05;
+    double xBuffer = (maxDate - minDate) * 1;
     double barWidth = (maxDate - minDate) / (dates.size() * 1.2);
 
     QVector<QVector<double>> symptomValues(selectedSymptoms.size());
@@ -942,10 +943,13 @@ void MainWindow::plotHistogramStacked(const QList<QVariantMap>& entries, const Q
     synchronizedXAxes.clear();  // Make sure it's clear before we start adding
     synchronizedXAxes.reserve(numPlots);
 
-    static QVector<QColor> colors = {
-        QColor(33, 150, 243), QColor(76, 175, 80),
-        QColor(255, 152, 0), QColor(156, 39, 176),
-        QColor(244, 67, 54), QColor(0, 188, 212)
+    QVector<QColor> colors = {
+        QColor(33, 150, 243, 150),
+        QColor(76, 175, 80, 150),
+        QColor(255, 152, 0, 150),
+        QColor(156, 39, 176, 150),
+        QColor(244, 67, 54, 150),
+        QColor(0, 188, 212, 150)
     };
 
     for (int i = 0; i < numPlots; ++i) {
@@ -980,8 +984,6 @@ void MainWindow::plotHistogramStacked(const QList<QVariantMap>& entries, const Q
         axisRect->insetLayout()->addElement(title, Qt::AlignTop | Qt::AlignHCenter);
     }
 
-    // Connect synchronization AFTER all axes are created and added
-    // Use Qt::UniqueConnection to prevent duplicate connections
     for (int i = 0; i < synchronizedXAxes.size(); ++i) {
         QPointer<QCPAxis> xAxis = synchronizedXAxes[i];
         if (xAxis) {
