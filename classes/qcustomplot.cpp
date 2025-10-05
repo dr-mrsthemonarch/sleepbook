@@ -23,7 +23,7 @@
 **          Version: 2.1.1                                                **
 ****************************************************************************/
 
-#include "../qcustomplot.h"
+#include "qcustomplot.h"
 
 
 /* including file 'src/vector2d.cpp'       */

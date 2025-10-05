@@ -1,4 +1,3 @@
-//created by drmrsthemonarch with ai effort
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
@@ -21,10 +20,17 @@
 #include <QDir>
 #include <QDialog>
 #include <QComboBox>
+#include <QTabWidget>
+#include <QTableWidget>
+#include <QHeaderView>
+#include <QListWidget>
+#include <QDateEdit>
+#include <QCheckBox>
 #include "symptom.h"
 #include "symptomwidget.h"
 #include "usermanager.h"
 #include "dataencryption.h"
+#include "qcustomplot.h"
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -39,9 +45,18 @@ private slots:
     void onClearForm();
     void onLogout();
     void onUserChanged();
+    void onTabChanged(int index);
+    void onHistoryDateSelected(int row, int column);
+    void onDeleteHistoryEntry();
+    void onPlotTypeChanged(int index);
+    void onSelectAllSymptoms();
+    void onDeselectAllSymptoms();
 
 private:
     void setupUI();
+    void setupEntryTab();
+    void setupHistoryTab();
+    void setupStatisticsTab();
     void loadSymptoms();
     void saveSymptoms();
     void rebuildSymptomWidgets();
@@ -52,8 +67,19 @@ private:
     void showAddSymptomDialog();
     void updateWindowTitle();
     void createUserToolbar();
+    void loadHistoryData();
+    void loadStatisticsData();
+    QList<QVariantMap> loadAllEntries();
+    QList<QVariantMap> filterEntriesByDateRange(const QList<QVariantMap>& entries, const QDate& start, const QDate& end);
+    void plotTimeSeriesData(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms);
+    void plotHistogramData(const QList<QVariantMap>& entries, const QString& symptomName);
+    void plotCorrelationData(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms);
 
     // UI Components
+    QTabWidget* tabWidget;
+
+    // Entry tab
+    QWidget* entryTab;
     QTextEdit* notesEdit;
     QScrollArea* symptomsScrollArea;
     QWidget* symptomsContainer;
@@ -64,6 +90,24 @@ private:
     QPushButton* saveButton;
     QPushButton* clearButton;
     QPushButton* addSymptomButton;
+
+    // History tab
+    QWidget* historyTab;
+    QTableWidget* historyTable;
+    QPushButton* deleteEntryButton;
+    QPushButton* refreshHistoryButton;
+
+    // Statistics tab
+    QWidget* statisticsTab;
+    QComboBox* plotTypeSelector;
+    QListWidget* symptomListWidget;
+    QDateEdit* startDateEdit;
+    QDateEdit* endDateEdit;
+    QCheckBox* allDateRangeCheckbox;
+    QCustomPlot* customPlot;
+    QPushButton* generatePlotButton;
+    QPushButton* selectAllButton;
+    QPushButton* deselectAllButton;
 
     // User toolbar
     QToolBar* userToolbar;
