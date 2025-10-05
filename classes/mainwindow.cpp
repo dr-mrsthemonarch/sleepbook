@@ -4,6 +4,7 @@
 #include <QBuffer>
 #include "logindialog.h"
 #include "histogramwidget.h"
+#include "datapathmanager.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent) {
@@ -1660,6 +1661,27 @@ void MainWindow::onClearForm() {
     }
 }
 
+// QString MainWindow::getCurrentDataDirectory() {
+//     QString username = "default";
+//
+//     if (UserManager::instance().isLoggedIn()) {
+//         User *user = UserManager::instance().getCurrentUser();
+//         if (user) {
+//             username = user->getUsername();
+//         }
+//     }
+//
+//     QString dataDir = QString("sleep_data/%1").arg(username);
+//     QDir dir;
+//     if (!dir.exists(dataDir)) {
+//         dir.mkpath(dataDir);
+//     }
+//     return dataDir;
+// }
+
+
+
+
 QString MainWindow::getCurrentDataDirectory() {
     QString username = "default";
 
@@ -1670,12 +1692,7 @@ QString MainWindow::getCurrentDataDirectory() {
         }
     }
 
-    QString dataDir = QString("sleep_data/%1").arg(username);
-    QDir dir;
-    if (!dir.exists(dataDir)) {
-        dir.mkpath(dataDir);
-    }
-    return dataDir;
+    return DataPathManager::instance().getUserDataPath(username);
 }
 
 QString MainWindow::getSymptomDataFile() {

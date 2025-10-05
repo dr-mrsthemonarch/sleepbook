@@ -36,6 +36,8 @@ set(HEADERS
         classes/qcustomplot.h
         classes/histogramwidget.cpp
         classes/histogramwidget.h
+        classes/datapathmanager.cpp
+        classes/datapathmanager.h
 )
 
 # Create executable
@@ -51,13 +53,14 @@ target_link_libraries(${PROJECT_NAME}
         Qt5::Widgets
         Qt5::OpenGL
 )
-# For macOS app bundles
-#if(APPLE)
-#    set_target_properties(sleepbook PROPERTIES
-#            AUTOMOC ON
-#            MACOSX_BUNDLE TRUE
-#            MACOSX_BUNDLE_GUI_IDENTIFIER "Sleep Book"
-#            MACOSX_BUNDLE_BUNDLE_VERSION "1.0"
-#            MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
-#    )
-#endif()
+
+#For macOS app bundles
+if(APPLE)
+    set_target_properties(sleepbook PROPERTIES
+            AUTOMOC ON
+            MACOSX_BUNDLE TRUE
+            MACOSX_BUNDLE_GUI_IDENTIFIER "Sleep Book"
+            MACOSX_BUNDLE_BUNDLE_VERSION "1.0"
+            MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
+    )
+endif()

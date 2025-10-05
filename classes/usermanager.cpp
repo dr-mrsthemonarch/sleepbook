@@ -2,6 +2,7 @@
 #include "usermanager.h"
 #include <QTextStream>
 #include <QDir>
+#include "datapathmanager.h"
 
 UserManager::UserManager()
     : m_currentUser(nullptr) {
@@ -18,12 +19,16 @@ UserManager& UserManager::instance() {
     return instance;
 }
 
+// QString UserManager::getUsersFilePath() const {
+//     QDir dir;
+//     if (!dir.exists("sleep_data")) {
+//         dir.mkpath("sleep_data");
+//     }
+//     return "sleep_data/users.txt";
+// }
+
 QString UserManager::getUsersFilePath() const {
-    QDir dir;
-    if (!dir.exists("sleep_data")) {
-        dir.mkpath("sleep_data");
-    }
-    return "sleep_data/users.txt";
+    return DataPathManager::instance().getUsersFilePath();
 }
 
 void UserManager::loadUsers() {
