@@ -873,246 +873,138 @@ void MainWindow::plotHistogramOverlay(const QList<QVariantMap>& entries, const Q
     customPlot->replot();
 }
 
-// void MainWindow::plotHistogramStacked(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms) {
-//     // --- CRITICAL FIX: Disconnect ALL signals before clearing ---
-//     // This is ESSENTIAL for preventing crashes when switching to other plot types.
-//     for (QPointer<QCPAxis> xAxis : qAsConst(synchronizedXAxes)) {
-//         if (xAxis) {
-//             // Disconnect ALL signals from this axis to ALL receivers
-//             QObject::disconnect(xAxis, nullptr, this, nullptr);
-//         }
-//     }
-//     synchronizedXAxes.clear(); // Clear the list of potentially dangling pointers
-//
-//     // Also disconnect the syncXAxes slot from ANY sender that might still be connected
-//     // NOTE: This uses the old-style disconnect since the signature is ambiguous across C++ versions.
-//     disconnect(this, SLOT(syncXAxes(QCPRange)));
-//
-//     customPlot->setNoAntialiasingOnDrag(true);
-//     customPlot->clearGraphs();
-//     customPlot->clearPlottables();
-//
-//     // Now safe to clear layout since all signal connections are gone
-//     customPlot->plotLayout()->clear();
-//
-//     QMap<QDate, QMap<QString, double>> dateData;
-//
-//     for (const auto& entry : entries) {
-//         QDate date = entry["date"].toDate();
-//         if (!date.isValid()) continue;
-//
-//         auto& dateMap = dateData[date];
-//         for (const QString& s : selectedSymptoms)
-//             if (!dateMap.contains(s))
-//                 dateMap[s] = 0.0;
-//
-//         for (const QString& s : selectedSymptoms) {
-//             if (s == "Sleep Duration") {
-//                 dateMap[s] = entry["sleep_duration"].toDouble();
-//             } else if (entry.contains(s)) {
-//                 QVariant value = entry[s];
-//                 if (value.type() == QVariant::Bool) {
-//                     if (value.toBool()) dateMap[s] += 1.0;
-//                 } else dateMap[s] += value.toDouble();
-//             }
-//         }
-//     }
-//
-//     QList<QDate> dates = dateData.keys();
-//     std::sort(dates.begin(), dates.end());
-//     if (dates.isEmpty()) {
-//         customPlot->replot();
-//         return;
-//     }
-//
-//     QVector<double> dateNumbers;
-//     for (const QDate& date : dates)
-//         dateNumbers.append(date.startOfDay().toMSecsSinceEpoch() / 1000.0);
-//
-//     double minDate = dateNumbers.first();
-//     double maxDate = dateNumbers.last();
-//     double xBuffer = (maxDate - minDate) * 0.5;
-//     double barWidth = (maxDate - minDate) / (dates.size() * 1.2);
-//
-//     QVector<QVector<double>> symptomValues(selectedSymptoms.size());
-//     QVector<double> maxY(selectedSymptoms.size(), 0.0);
-//
-//     for (int i = 0; i < selectedSymptoms.size(); ++i) {
-//         const QString& name = selectedSymptoms[i];
-//         QVector<double>& vals = symptomValues[i];
-//         for (const QDate& date : dates) {
-//             double v = dateData[date].value(name, 0.0);
-//             vals.append(v);
-//             maxY[i] = std::max(maxY[i], v);
-//         }
-//     }
-//
-//     int numPlots = selectedSymptoms.size();
-//     synchronizedXAxes.clear();
-//     synchronizedXAxes.reserve(numPlots);
-//
-//     // Color palette
-//     QVector<QColor> colors = {
-//         QColor(33, 150, 243, 150), QColor(76, 175, 80, 150),
-//         QColor(255, 152, 0, 150), QColor(156, 39, 176, 150),
-//         QColor(244, 67, 54, 150), QColor(0, 188, 212, 150)
-//     };
-//
-//     for (int i = 0; i < numPlots; ++i) {
-//         QCPAxisRect* axisRect = new QCPAxisRect(customPlot);
-//         customPlot->plotLayout()->addElement(i, 0, axisRect);
-//
-//         QCPAxis* xAxis = axisRect->axis(QCPAxis::atBottom);
-//         QCPAxis* yAxis = axisRect->axis(QCPAxis::atLeft);
-//         synchronizedXAxes.append(xAxis); // Store the axis pointer
-//
-//         QCPBars* bars = new QCPBars(xAxis, yAxis);
-//         bars->setData(dateNumbers, symptomValues[i]);
-//         QColor color = colors[i % colors.size()];
-//         bars->setPen(QPen(color));
-//         bars->setBrush(QBrush(color));
-//         bars->setWidth(barWidth);
-//
-//         if (i == numPlots - 1) {
-//             QSharedPointer<QCPAxisTickerDateTime> ticker(new QCPAxisTickerDateTime);
-//             ticker->setDateTimeFormat("MMM d");
-//             xAxis->setTicker(ticker);
-//             xAxis->setLabel("Date");
-//         } else {
-//             xAxis->setTickLabels(false);
-//         }
-//
-//         yAxis->setLabel(selectedSymptoms[i] == "Sleep Duration" ? "Hours" : "Count");
-//         yAxis->setRange(0, maxY[i] * 1.1);
-//         xAxis->setRange(minDate - xBuffer, maxDate + xBuffer);
-//
-//         QCPTextElement* title = new QCPTextElement(customPlot, selectedSymptoms[i]);
-//         axisRect->insetLayout()->addElement(title, Qt::AlignTop | Qt::AlignHCenter);
-//     }
-//
-//     // Connect synchronization AFTER all axes are created and added
-//     // --- CRITICAL FIX: Use the argument-taking syncXAxes slot ---
-//     for (int i = 0; i < synchronizedXAxes.size(); ++i) {
-//         QPointer<QCPAxis> xAxis = synchronizedXAxes[i];
-//         if (xAxis) {
-//             // Connect to the argument-taking slot, which is safe from recursion
-//             connect(xAxis, QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
-//                     this, &MainWindow::syncXAxes, Qt::UniqueConnection);
-//         }
-//     }
-//     // --- END CRITICAL FIX ---
-//
-//     customPlot->setNotAntialiasedElements(QCP::aeNone);
-//     customPlot->replot();
-// }
-
-
 void MainWindow::plotHistogramStacked(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms) {
-    // Safe cleanup
+    // --- CRITICAL FIX: Disconnect ALL signals before clearing ---
+    // This is ESSENTIAL for preventing crashes when switching to other plot types.
     for (QPointer<QCPAxis> xAxis : qAsConst(synchronizedXAxes)) {
         if (xAxis) {
+            // Disconnect ALL signals from this axis to ALL receivers
             QObject::disconnect(xAxis, nullptr, this, nullptr);
         }
     }
-    synchronizedXAxes.clear();
+    synchronizedXAxes.clear(); // Clear the list of potentially dangling pointers
 
+    // Also disconnect the syncXAxes slot from ANY sender that might still be connected
+    // NOTE: This uses the old-style disconnect since the signature is ambiguous across C++ versions.
+    disconnect(this, SLOT(syncXAxes(QCPRange)));
+
+    customPlot->setNoAntialiasingOnDrag(true);
     customPlot->clearGraphs();
     customPlot->clearPlottables();
-    customPlot->plotLayout()->simplify(); // Use simplify instead of clear
 
-    // Ensure we have a proper axis rect without destroying the layout
-    QCPAxisRect* axisRect = nullptr;
-    if (customPlot->plotLayout()->elementCount() == 0 ||
-        !(axisRect = qobject_cast<QCPAxisRect*>(customPlot->plotLayout()->element(0, 0)))) {
-        // Only create new axis rect if none exists or it's not the right type
-        axisRect = new QCPAxisRect(customPlot);
-        customPlot->plotLayout()->addElement(0, 0, axisRect);
+    // Now safe to clear layout since all signal connections are gone
+    customPlot->plotLayout()->clear();
+
+    QMap<QDate, QMap<QString, double>> dateData;
+
+    for (const auto& entry : entries) {
+        QDate date = entry["date"].toDate();
+        if (!date.isValid()) continue;
+
+        auto& dateMap = dateData[date];
+        for (const QString& s : selectedSymptoms)
+            if (!dateMap.contains(s))
+                dateMap[s] = 0.0;
+
+        for (const QString& s : selectedSymptoms) {
+            if (s == "Sleep Duration") {
+                dateMap[s] = entry["sleep_duration"].toDouble();
+            } else if (entry.contains(s)) {
+                QVariant value = entry[s];
+                if (value.type() == QVariant::Bool) {
+                    if (value.toBool()) dateMap[s] += 1.0;
+                } else dateMap[s] += value.toDouble();
+            }
+        }
     }
 
-    // Set current axes
-    customPlot->setCurrentLayer("main");
-    customPlot->xAxis = axisRect->axis(QCPAxis::atBottom);
-    customPlot->yAxis = axisRect->axis(QCPAxis::atLeft);
-
-    // Rest of your data processing code remains the same...
-    QMap<QDate, QMap<QString, double>> dateData;
-    QList<QDate> dates;
-    QVector<double> dateNumbers;
-
-    // Your existing data processing logic here...
-
+    QList<QDate> dates = dateData.keys();
+    std::sort(dates.begin(), dates.end());
     if (dates.isEmpty()) {
         customPlot->replot();
         return;
     }
 
-    // Continue with your existing bar chart creation code...
-    QVector<QCPBars*> barSets;
-    QCPBars* previousBars = nullptr;
-    double maxTotalValue = 0;
-    QVector<double> totalValues(dateNumbers.size(), 0.0);
+    QVector<double> dateNumbers;
+    for (const QDate& date : dates)
+        dateNumbers.append(date.startOfDay().toMSecsSinceEpoch() / 1000.0);
 
-    QVector<QColor> colors = {
-        QColor(33, 150, 243), QColor(76, 175, 80),
-        QColor(255, 152, 0), QColor(156, 39, 176),
-        QColor(244, 67, 54), QColor(0, 188, 212)
-    };
+    double minDate = dateNumbers.first();
+    double maxDate = dateNumbers.last();
+    double xBuffer = (maxDate - minDate) * 0.5;
+    double barWidth = (maxDate - minDate) / (dates.size() * 1.2);
+
+    QVector<QVector<double>> symptomValues(selectedSymptoms.size());
+    QVector<double> maxY(selectedSymptoms.size(), 0.0);
 
     for (int i = 0; i < selectedSymptoms.size(); ++i) {
         const QString& name = selectedSymptoms[i];
-        QCPBars* currentBars = new QCPBars(customPlot->xAxis, customPlot->yAxis);
-        barSets.append(currentBars);
-        currentBars->setName(name);
-
-        QColor color = colors[i % colors.size()];
-        currentBars->setPen(QPen(color.darker(150)));
-        currentBars->setBrush(QBrush(color));
-
-        QVector<double> vals;
-        for (int j = 0; j < dates.size(); ++j) {
-            double v = dateData[dates[j]].value(name, 0.0);
+        QVector<double>& vals = symptomValues[i];
+        for (const QDate& date : dates) {
+            double v = dateData[date].value(name, 0.0);
             vals.append(v);
-            totalValues[j] += v;
-            maxTotalValue = std::max(maxTotalValue, totalValues[j]);
-        }
-
-        currentBars->setData(dateNumbers, vals);
-
-        if (previousBars) {
-            currentBars->moveAbove(previousBars);
-        }
-        previousBars = currentBars;
-    }
-
-    // Axis setup and rest of your code...
-    double minDate = dateNumbers.first();
-    double maxDate = dateNumbers.last();
-    double xBuffer = (maxDate - minDate) * 0.05;
-    double defaultBarWidth = (maxDate - minDate) / (dates.size() * 1.1);
-
-    for (QCPBars* bars : barSets) {
-        if (bars) {
-            bars->setWidth(defaultBarWidth);
+            maxY[i] = std::max(maxY[i], v);
         }
     }
 
-    customPlot->xAxis->setLabel("Date");
-    customPlot->yAxis->setLabel("Total Value (Count/Hours)");
-    customPlot->xAxis->setRange(minDate - xBuffer, maxDate + xBuffer);
+    int numPlots = selectedSymptoms.size();
+    synchronizedXAxes.clear();
+    synchronizedXAxes.reserve(numPlots);
 
-    QSharedPointer<QCPAxisTickerDateTime> ticker(new QCPAxisTickerDateTime);
-    ticker->setDateTimeFormat("MMM d");
-    customPlot->xAxis->setTicker(ticker);
-    customPlot->yAxis->setRange(0, maxTotalValue * 1.1);
+    // Color palette
+    QVector<QColor> colors = {
+        QColor(33, 150, 243, 150), QColor(76, 175, 80, 150),
+        QColor(255, 152, 0, 150), QColor(156, 39, 176, 150),
+        QColor(244, 67, 54, 150), QColor(0, 188, 212, 150)
+    };
 
-    customPlot->legend->setVisible(true);
-    customPlot->legend->setBrush(QBrush(QColor(255, 255, 255, 200)));
-    customPlot->axisRect()->insetLayout()->setInsetAlignment(0, Qt::AlignTop | Qt::AlignRight);
+    for (int i = 0; i < numPlots; ++i) {
+        QCPAxisRect* axisRect = new QCPAxisRect(customPlot);
+        customPlot->plotLayout()->addElement(i, 0, axisRect);
 
-    customPlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom);
+        QCPAxis* xAxis = axisRect->axis(QCPAxis::atBottom);
+        QCPAxis* yAxis = axisRect->axis(QCPAxis::atLeft);
+        synchronizedXAxes.append(xAxis); // Store the axis pointer
+
+        QCPBars* bars = new QCPBars(xAxis, yAxis);
+        bars->setData(dateNumbers, symptomValues[i]);
+        QColor color = colors[i % colors.size()];
+        bars->setPen(QPen(color));
+        bars->setBrush(QBrush(color));
+        bars->setWidth(barWidth);
+
+        if (i == numPlots - 1) {
+            QSharedPointer<QCPAxisTickerDateTime> ticker(new QCPAxisTickerDateTime);
+            ticker->setDateTimeFormat("MMM d");
+            xAxis->setTicker(ticker);
+            xAxis->setLabel("Date");
+        } else {
+            xAxis->setTickLabels(false);
+        }
+
+        yAxis->setLabel(selectedSymptoms[i] == "Sleep Duration" ? "Hours" : "Count");
+        yAxis->setRange(0, maxY[i] * 1.1);
+        xAxis->setRange(minDate - xBuffer, maxDate + xBuffer);
+
+        QCPTextElement* title = new QCPTextElement(customPlot, selectedSymptoms[i]);
+        axisRect->insetLayout()->addElement(title, Qt::AlignTop | Qt::AlignHCenter);
+    }
+
+    // Connect synchronization AFTER all axes are created and added
+    // --- CRITICAL FIX: Use the argument-taking syncXAxes slot ---
+    for (int i = 0; i < synchronizedXAxes.size(); ++i) {
+        QPointer<QCPAxis> xAxis = synchronizedXAxes[i];
+        if (xAxis) {
+            // Connect to the argument-taking slot, which is safe from recursion
+            connect(xAxis, QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
+                    this, &MainWindow::syncXAxes, Qt::UniqueConnection);
+        }
+    }
+    // --- END CRITICAL FIX ---
+
+    customPlot->setNotAntialiasedElements(QCP::aeNone);
     customPlot->replot();
 }
-
 
 // Change in your source file (mainwindow.cpp):
 void MainWindow::syncXAxes(const QCPRange& newRange) {

@@ -52,7 +52,7 @@ private slots:
     void onPlotTypeChanged(int index);
     void onSelectAllSymptoms();
     void onDeselectAllSymptoms();
-    void syncXAxes();
+    void syncXAxes(const QCPRange& newRange);
 
 private:
     void setupUI();
