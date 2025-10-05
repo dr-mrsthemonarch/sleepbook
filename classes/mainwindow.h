@@ -51,6 +51,7 @@ private slots:
     void onPlotTypeChanged(int index);
     void onSelectAllSymptoms();
     void onDeselectAllSymptoms();
+    void syncXAxes();
 
 private:
     void setupUI();
@@ -72,8 +73,11 @@ private:
     QList<QVariantMap> loadAllEntries();
     QList<QVariantMap> filterEntriesByDateRange(const QList<QVariantMap>& entries, const QDate& start, const QDate& end);
     void plotTimeSeriesData(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms);
-    void plotHistogramData(const QList<QVariantMap>& entries, const QString& symptomName);
+    void plotHistogramData(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms);
+    void plotHistogramOverlay(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms);
+    void plotHistogramStacked(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms);
     void plotCorrelationData(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms);
+    QList<QCPAxis*> synchronizedXAxes;
 
     // UI Components
     QTabWidget* tabWidget;
@@ -104,6 +108,7 @@ private:
     QDateEdit* startDateEdit;
     QDateEdit* endDateEdit;
     QCheckBox* allDateRangeCheckbox;
+    QComboBox* histogramModeSelector;
     QCustomPlot* customPlot;
     QPushButton* generatePlotButton;
     QPushButton* selectAllButton;

@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find Qt5
-find_package(Qt5 REQUIRED COMPONENTS Core Widgets)
+find_package(Qt5 REQUIRED COMPONENTS Core Widgets OpenGL)
 
 # Enable automatic MOC, UIC, and RCC
 set(CMAKE_AUTOMOC ON)
@@ -44,6 +44,7 @@ add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 target_link_libraries(${PROJECT_NAME}
         Qt5::Core
         Qt5::Widgets
+        Qt5::OpenGL
 )
 # For macOS app bundles
 #if(APPLE)
