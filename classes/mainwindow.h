@@ -38,90 +38,150 @@ class MainWindow : public QMainWindow {
 
 public:
     explicit MainWindow(QWidget *parent = nullptr);
+
     ~MainWindow();
 
 private slots:
     void onSaveEntry();
+
     void onAddSymptom();
+
     void onClearForm();
+
     void onLogout();
+
     void onUserChanged();
+
     void onTabChanged(int index);
+
     void onHistoryDateSelected(int row, int column);
+
     void onDeleteHistoryEntry();
+
     void onPlotTypeChanged(int index);
+
     void onSelectAllSymptoms();
+
     void onDeselectAllSymptoms();
-    void syncXAxes(const QCPRange& newRange);
+
+    void syncXAxes(const QCPRange &newRange);
 
 private:
     void setupUI();
+
+    void loadHistogramData();
+
+    void onHistogramSelectAllSymptoms();
+
+    void onHistogramDeselectAllSymptoms();
+
     void setupEntryTab();
+
     void setupHistoryTab();
+
+    void setupHistogramTab();
+
     void setupStatisticsTab();
+
     void loadSymptoms();
+
     void saveSymptoms();
+
     void rebuildSymptomWidgets();
+
     bool saveEntry();
+
     bool saveSummaryEntry();
+
     QString getCurrentDataDirectory();
+
     QString getSymptomDataFile();
+
     void showAddSymptomDialog();
+
     void updateWindowTitle();
+
     void createUserToolbar();
+
     void loadHistoryData();
+
     void loadStatisticsData();
+
     QList<QVariantMap> loadAllEntries();
-    QList<QVariantMap> filterEntriesByDateRange(const QList<QVariantMap>& entries, const QDate& start, const QDate& end);
-    void plotTimeSeriesData(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms);
-    void plotHistogramData(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms);
-    void plotHistogramOverlay(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms);
-    void plotHistogramStacked(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms);
-    void plotCorrelationData(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms);
+
+    QList<QVariantMap> filterEntriesByDateRange(const QList<QVariantMap> &entries, const QDate &start,
+                                                const QDate &end);
+
+    void plotTimeSeriesData(const QList<QVariantMap> &entries, const QStringList &selectedSymptoms);
+
+    void plotHistogramData(const QList<QVariantMap> &entries, const QStringList &selectedSymptoms);
+
+    void plotHistogramOverlay(const QList<QVariantMap> &entries, const QStringList &selectedSymptoms);
+
+    void initializeHistogram();
+
+    void showHistogramContextMenu(const QPoint &pos);
+
+    void resetHistogramZoom();
+
+    void plotHistogramStacked(const QList<QVariantMap> &entries, const QStringList &selectedSymptoms);
+
+    void plotCorrelationData(const QList<QVariantMap> &entries, const QStringList &selectedSymptoms);
 
     // UI Components
-    QTabWidget* tabWidget;
+    QTabWidget *tabWidget;
 
     // Entry tab
-    QWidget* entryTab;
-    QTextEdit* notesEdit;
-    QScrollArea* symptomsScrollArea;
-    QWidget* symptomsContainer;
-    QVBoxLayout* symptomsLayout;
-    QDateEdit* dateEdit;
-    QTimeEdit* bedtimeEdit;
-    QTimeEdit* wakeupEdit;
-    QPushButton* saveButton;
-    QPushButton* clearButton;
-    QPushButton* addSymptomButton;
+    QWidget *entryTab;
+    QTextEdit *notesEdit;
+    QScrollArea *symptomsScrollArea;
+    QWidget *symptomsContainer;
+    QVBoxLayout *symptomsLayout;
+    QDateEdit *dateEdit;
+    QTimeEdit *bedtimeEdit;
+    QTimeEdit *wakeupEdit;
+    QPushButton *saveButton;
+    QPushButton *clearButton;
+    QPushButton *addSymptomButton;
 
     // History tab
-    QWidget* historyTab;
-    QTableWidget* historyTable;
-    QPushButton* deleteEntryButton;
-    QPushButton* refreshHistoryButton;
+    QWidget *historyTab;
+    QTableWidget *historyTable;
+    QPushButton *deleteEntryButton;
+    QPushButton *refreshHistoryButton;
 
     // Statistics tab
-    QWidget* statisticsTab;
-    QComboBox* plotTypeSelector;
-    QListWidget* symptomListWidget;
-    QDateEdit* startDateEdit;
-    QDateEdit* endDateEdit;
-    QCheckBox* allDateRangeCheckbox;
-    QComboBox* histogramModeSelector;
-    QCustomPlot* customPlot;
-    QPushButton* generatePlotButton;
-    QPushButton* selectAllButton;
-    QPushButton* deselectAllButton;
+    QWidget *statisticsTab;
+    QComboBox *plotTypeSelector;
+    QListWidget *symptomListWidget;
+    QDateEdit *startDateEdit;
+    QDateEdit *endDateEdit;
+    QCheckBox *allDateRangeCheckbox;
+    QComboBox *histogramModeSelector;
+    QCustomPlot *customPlot;
+    QPushButton *generatePlotButton;
+    QPushButton *selectAllButton;
+    QPushButton *deselectAllButton;
+
+    // Histogram Tab members
+    QWidget *histogramTab;
+    QCheckBox *histogramAllDateRangeCheckbox;
+    QDateEdit *histogramStartDateEdit;
+    QDateEdit *histogramEndDateEdit;
+    QListWidget *histogramSymptomListWidget;
+    QPushButton *histogramSelectAllButton;
+    QPushButton *histogramDeselectAllButton;
+    QPushButton *generateHistogramButton;
+    QCustomPlot *histogramCustomPlot;
 
     // User toolbar
-    QToolBar* userToolbar;
-    QLabel* userLabel;
-    QPushButton* logoutButton;
+    QToolBar *userToolbar;
+    QLabel *userLabel;
+    QPushButton *logoutButton;
 
     QList<Symptom> symptoms;
-    QList<SymptomWidget*> symptomWidgets;
-    QVector<QPointer<QCPAxis>> synchronizedXAxes;
+    QList<SymptomWidget *> symptomWidgets;
+    QVector<QPointer<QCPAxis> > synchronizedXAxes;
 };
 
 #endif // MAINWINDOW_H

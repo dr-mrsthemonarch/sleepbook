@@ -3,6 +3,7 @@
 #include <QDataStream>
 #include <QBuffer>
 #include "logindialog.h"
+#include "histogramwidget.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent) {
@@ -26,12 +27,12 @@ MainWindow::~MainWindow() {
 
 void MainWindow::setupUI() {
     setWindowTitle("Sleep Quality Tracker");
-    resize(1000, 700);
+    resize(1200, 800); // Slightly wider to accommodate more tabs
 
-    QWidget* centralWidget = new QWidget(this);
+    QWidget *centralWidget = new QWidget(this);
     setCentralWidget(centralWidget);
 
-    QVBoxLayout* mainLayout = new QVBoxLayout(centralWidget);
+    QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
 
     // Create tab widget
     tabWidget = new QTabWidget();
@@ -41,26 +42,193 @@ void MainWindow::setupUI() {
     setupEntryTab();
     setupHistoryTab();
     setupStatisticsTab();
+    setupHistogramTab(); // New tab for stacked histograms
 
     tabWidget->addTab(entryTab, "New Entry");
     tabWidget->addTab(historyTab, "History");
     tabWidget->addTab(statisticsTab, "Statistics");
+    tabWidget->addTab(histogramTab, "Histograms"); // New tab
 
     connect(tabWidget, &QTabWidget::currentChanged, this, &MainWindow::onTabChanged);
 }
 
+void MainWindow::loadHistogramData() {
+    if (!UserManager::instance().isLoggedIn()) {
+        return;
+    }
+
+    // Update symptom list if empty
+    if (histogramSymptomListWidget->count() == 0) {
+        QListWidgetItem *sleepItem = new QListWidgetItem("Sleep Duration");
+        sleepItem->setFlags(sleepItem->flags() | Qt::ItemIsUserCheckable);
+        sleepItem->setCheckState(Qt::Checked);
+        histogramSymptomListWidget->addItem(sleepItem);
+
+        for (const Symptom &s: symptoms) {
+            QListWidgetItem *item = new QListWidgetItem(s.getName());
+            item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+            item->setCheckState(Qt::Unchecked);
+            histogramSymptomListWidget->addItem(item);
+        }
+    }
+
+    // Get selected symptoms
+    QStringList selectedSymptoms;
+    for (int i = 0; i < histogramSymptomListWidget->count(); ++i) {
+        QListWidgetItem *item = histogramSymptomListWidget->item(i);
+        if (item->checkState() == Qt::Checked) {
+            selectedSymptoms.append(item->text());
+        }
+    }
+
+    if (selectedSymptoms.isEmpty()) {
+        QMessageBox::warning(this, "No Selection", "Please select at least one symptom or metric to plot.");
+        return;
+    }
+
+    // Load all entries
+    QList<QVariantMap> entries = loadAllEntries();
+
+    if (entries.isEmpty()) {
+        histogramCustomPlot->clearGraphs();
+        histogramCustomPlot->clearPlottables();
+        histogramCustomPlot->replot();
+        QMessageBox::information(this, "No Data", "No sleep data available for analysis.");
+        return;
+    }
+
+    // Filter by date range if needed
+    if (!histogramAllDateRangeCheckbox->isChecked()) {
+        entries = filterEntriesByDateRange(entries, histogramStartDateEdit->date(), histogramEndDateEdit->date());
+        if (entries.isEmpty()) {
+            QMessageBox::information(this, "No Data", "No data in selected date range.");
+            return;
+        }
+    }
+
+    // Sort by date
+    std::sort(entries.begin(), entries.end(), [](const QVariantMap &a, const QVariantMap &b) {
+        return a["date"].toDate() < b["date"].toDate();
+    });
+
+    // Generate stacked histogram
+    plotHistogramStacked(entries, selectedSymptoms);
+}
+
+void MainWindow::onHistogramSelectAllSymptoms() {
+    for (int i = 0; i < histogramSymptomListWidget->count(); ++i) {
+        histogramSymptomListWidget->item(i)->setCheckState(Qt::Checked);
+    }
+}
+
+void MainWindow::onHistogramDeselectAllSymptoms() {
+    for (int i = 0; i < histogramSymptomListWidget->count(); ++i) {
+        histogramSymptomListWidget->item(i)->setCheckState(Qt::Unchecked);
+    }
+}
+
+void MainWindow::setupHistogramTab() {
+    histogramTab = new QWidget();
+    QHBoxLayout *mainLayout = new QHBoxLayout(histogramTab);
+
+    // Left panel - controls
+    QVBoxLayout *controlLayout = new QVBoxLayout();
+    controlLayout->setSpacing(10);
+
+    QLabel *titleLabel = new QLabel("Stacked Histogram Configuration");
+    titleLabel->setStyleSheet("font-size: 14px; font-weight: bold;");
+    controlLayout->addWidget(titleLabel);
+
+    // Date range
+    controlLayout->addWidget(new QLabel("Date Range:"));
+    histogramAllDateRangeCheckbox = new QCheckBox("Use all data");
+    histogramAllDateRangeCheckbox->setChecked(true);
+    controlLayout->addWidget(histogramAllDateRangeCheckbox);
+
+    QHBoxLayout *startDateLayout = new QHBoxLayout();
+    startDateLayout->addWidget(new QLabel("From:"));
+    histogramStartDateEdit = new QDateEdit();
+    histogramStartDateEdit->setDate(QDate::currentDate().addMonths(-1));
+    histogramStartDateEdit->setCalendarPopup(true);
+    histogramStartDateEdit->setEnabled(false);
+    startDateLayout->addWidget(histogramStartDateEdit);
+    controlLayout->addLayout(startDateLayout);
+
+    QHBoxLayout *endDateLayout = new QHBoxLayout();
+    endDateLayout->addWidget(new QLabel("To:"));
+    histogramEndDateEdit = new QDateEdit();
+    histogramEndDateEdit->setDate(QDate::currentDate());
+    histogramEndDateEdit->setCalendarPopup(true);
+    histogramEndDateEdit->setEnabled(false);
+    endDateLayout->addWidget(histogramEndDateEdit);
+    controlLayout->addLayout(endDateLayout);
+
+    // Symptom selection
+    controlLayout->addWidget(new QLabel("Select Symptoms/Metrics:"));
+
+    QHBoxLayout *selectButtonLayout = new QHBoxLayout();
+    histogramSelectAllButton = new QPushButton("Select All");
+    histogramDeselectAllButton = new QPushButton("Deselect All");
+    selectButtonLayout->addWidget(histogramSelectAllButton);
+    selectButtonLayout->addWidget(histogramDeselectAllButton);
+    controlLayout->addLayout(selectButtonLayout);
+
+    histogramSymptomListWidget = new QListWidget();
+    histogramSymptomListWidget->setSelectionMode(QAbstractItemView::MultiSelection);
+    controlLayout->addWidget(histogramSymptomListWidget);
+
+    // Generate button
+    generateHistogramButton = new QPushButton("Generate Stacked Histogram");
+    generateHistogramButton->
+            setStyleSheet("background-color: #2196F3; color: white; padding: 10px; font-weight: bold;");
+    controlLayout->addWidget(generateHistogramButton);
+
+    controlLayout->addStretch();
+
+    // Right panel - plot (using QCustomPlot)
+    QVBoxLayout *plotLayout = new QVBoxLayout();
+
+    QLabel *plotTitle = new QLabel("Stacked Histogram Visualization");
+    plotTitle->setStyleSheet("font-size: 16px; font-weight: bold; padding: 10px;");
+    plotLayout->addWidget(plotTitle);
+
+    histogramCustomPlot = new QCustomPlot();
+    histogramCustomPlot->setOpenGl(true, 4);
+    histogramCustomPlot->setMinimumHeight(600);
+    plotLayout->addWidget(histogramCustomPlot);
+
+    QLabel *infoLabel = new QLabel(
+        "Tip: Stacked histograms show multiple symptoms in separate plots with synchronized X-axes. Use mouse wheel to zoom, drag to pan.");
+    infoLabel->setStyleSheet("color: #666; padding: 10px;");
+    infoLabel->setWordWrap(true);
+    plotLayout->addWidget(infoLabel);
+
+    // Add layouts to main
+    mainLayout->addLayout(controlLayout, 1);
+    mainLayout->addLayout(plotLayout, 3);
+
+    // Connect signals
+    connect(generateHistogramButton, &QPushButton::clicked, this, &MainWindow::loadHistogramData);
+    connect(histogramSelectAllButton, &QPushButton::clicked, this, &MainWindow::onHistogramSelectAllSymptoms);
+    connect(histogramDeselectAllButton, &QPushButton::clicked, this, &MainWindow::onHistogramDeselectAllSymptoms);
+    connect(histogramAllDateRangeCheckbox, &QCheckBox::toggled, [this](bool checked) {
+        histogramStartDateEdit->setEnabled(!checked);
+        histogramEndDateEdit->setEnabled(!checked);
+    });
+}
+
 void MainWindow::setupEntryTab() {
     entryTab = new QWidget();
-    QHBoxLayout* entryLayout = new QHBoxLayout(entryTab);
+    QHBoxLayout *entryLayout = new QHBoxLayout(entryTab);
 
     // Left Panel - Notes
-    QVBoxLayout* leftLayout = new QVBoxLayout();
-    QLabel* notesLabel = new QLabel("Sleep Notes:");
+    QVBoxLayout *leftLayout = new QVBoxLayout();
+    QLabel *notesLabel = new QLabel("Sleep Notes:");
     notesLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
     leftLayout->addWidget(notesLabel);
 
     // Date and time inputs
-    QHBoxLayout* dateLayout = new QHBoxLayout();
+    QHBoxLayout *dateLayout = new QHBoxLayout();
     dateLayout->addWidget(new QLabel("Date:"));
     dateEdit = new QDateEdit();
     dateEdit->setDate(QDate::currentDate());
@@ -69,7 +237,7 @@ void MainWindow::setupEntryTab() {
     dateLayout->addStretch();
     leftLayout->addLayout(dateLayout);
 
-    QHBoxLayout* timeLayout = new QHBoxLayout();
+    QHBoxLayout *timeLayout = new QHBoxLayout();
     timeLayout->addWidget(new QLabel("Bedtime:"));
     bedtimeEdit = new QTimeEdit();
     bedtimeEdit->setTime(QTime(22, 0));
@@ -87,7 +255,7 @@ void MainWindow::setupEntryTab() {
     leftLayout->addWidget(notesEdit);
 
     // Buttons
-    QHBoxLayout* buttonLayout = new QHBoxLayout();
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
     saveButton = new QPushButton("Save Entry");
     saveButton->setStyleSheet("background-color: #4CAF50; color: white; padding: 8px; font-weight: bold;");
     clearButton = new QPushButton("Clear");
@@ -98,8 +266,8 @@ void MainWindow::setupEntryTab() {
     leftLayout->addLayout(buttonLayout);
 
     // Right Panel - Symptoms
-    QVBoxLayout* rightLayout = new QVBoxLayout();
-    QLabel* symptomsLabel = new QLabel("Symptoms/Factors:");
+    QVBoxLayout *rightLayout = new QVBoxLayout();
+    QLabel *symptomsLabel = new QLabel("Symptoms/Factors:");
     symptomsLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
     rightLayout->addWidget(symptomsLabel);
 
@@ -132,9 +300,9 @@ void MainWindow::setupEntryTab() {
 
 void MainWindow::setupHistoryTab() {
     historyTab = new QWidget();
-    QVBoxLayout* layout = new QVBoxLayout(historyTab);
+    QVBoxLayout *layout = new QVBoxLayout(historyTab);
 
-    QLabel* titleLabel = new QLabel("Sleep History");
+    QLabel *titleLabel = new QLabel("Sleep History");
     titleLabel->setStyleSheet("font-size: 16px; font-weight: bold; padding: 10px;");
     layout->addWidget(titleLabel);
 
@@ -149,7 +317,7 @@ void MainWindow::setupHistoryTab() {
     layout->addWidget(historyTable);
 
     // Buttons
-    QHBoxLayout* buttonLayout = new QHBoxLayout();
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
     refreshHistoryButton = new QPushButton("Refresh");
     deleteEntryButton = new QPushButton("Delete Selected");
     deleteEntryButton->setStyleSheet("background-color: #f44336; color: white; padding: 6px;");
@@ -166,13 +334,13 @@ void MainWindow::setupHistoryTab() {
 
 void MainWindow::setupStatisticsTab() {
     statisticsTab = new QWidget();
-    QHBoxLayout* mainLayout = new QHBoxLayout(statisticsTab);
+    QHBoxLayout *mainLayout = new QHBoxLayout(statisticsTab);
 
     // Left panel - controls
-    QVBoxLayout* controlLayout = new QVBoxLayout();
+    QVBoxLayout *controlLayout = new QVBoxLayout();
     controlLayout->setSpacing(10);
 
-    QLabel* titleLabel = new QLabel("Plot Configuration");
+    QLabel *titleLabel = new QLabel("Plot Configuration");
     titleLabel->setStyleSheet("font-size: 14px; font-weight: bold;");
     controlLayout->addWidget(titleLabel);
 
@@ -180,7 +348,7 @@ void MainWindow::setupStatisticsTab() {
     controlLayout->addWidget(new QLabel("Plot Type:"));
     plotTypeSelector = new QComboBox();
     plotTypeSelector->addItem("Time Series (Line Chart)");
-    plotTypeSelector->addItem("Histogram (Frequency)");
+    plotTypeSelector->addItem("Histogram");
     plotTypeSelector->addItem("Correlation View");
     controlLayout->addWidget(plotTypeSelector);
 
@@ -188,7 +356,7 @@ void MainWindow::setupStatisticsTab() {
     controlLayout->addWidget(new QLabel("Histogram Mode:"));
     histogramModeSelector = new QComboBox();
     histogramModeSelector->addItem("Overlay (Single Plot)");
-    histogramModeSelector->addItem("Stacked (Multiple Plots)");
+    // histogramModeSelector->addItem("Stacked (Multiple Plots)");
     histogramModeSelector->setVisible(false);
     controlLayout->addWidget(histogramModeSelector);
 
@@ -198,7 +366,7 @@ void MainWindow::setupStatisticsTab() {
     allDateRangeCheckbox->setChecked(true);
     controlLayout->addWidget(allDateRangeCheckbox);
 
-    QHBoxLayout* startDateLayout = new QHBoxLayout();
+    QHBoxLayout *startDateLayout = new QHBoxLayout();
     startDateLayout->addWidget(new QLabel("From:"));
     startDateEdit = new QDateEdit();
     startDateEdit->setDate(QDate::currentDate().addMonths(-1));
@@ -207,7 +375,7 @@ void MainWindow::setupStatisticsTab() {
     startDateLayout->addWidget(startDateEdit);
     controlLayout->addLayout(startDateLayout);
 
-    QHBoxLayout* endDateLayout = new QHBoxLayout();
+    QHBoxLayout *endDateLayout = new QHBoxLayout();
     endDateLayout->addWidget(new QLabel("To:"));
     endDateEdit = new QDateEdit();
     endDateEdit->setDate(QDate::currentDate());
@@ -219,7 +387,7 @@ void MainWindow::setupStatisticsTab() {
     // Symptom selection
     controlLayout->addWidget(new QLabel("Select Symptoms/Metrics:"));
 
-    QHBoxLayout* selectButtonLayout = new QHBoxLayout();
+    QHBoxLayout *selectButtonLayout = new QHBoxLayout();
     selectAllButton = new QPushButton("Select All");
     deselectAllButton = new QPushButton("Deselect All");
     selectButtonLayout->addWidget(selectAllButton);
@@ -238,18 +406,18 @@ void MainWindow::setupStatisticsTab() {
     controlLayout->addStretch();
 
     // Right panel - plot
-    QVBoxLayout* plotLayout = new QVBoxLayout();
+    QVBoxLayout *plotLayout = new QVBoxLayout();
 
-    QLabel* plotTitle = new QLabel("Sleep Statistics Visualization");
+    QLabel *plotTitle = new QLabel("Sleep Statistics Visualization");
     plotTitle->setStyleSheet("font-size: 16px; font-weight: bold; padding: 10px;");
     plotLayout->addWidget(plotTitle);
 
     customPlot = new QCustomPlot();
-    customPlot->setOpenGl(true,4);
+    customPlot->setOpenGl(true, 4);
     customPlot->setMinimumHeight(500);
     plotLayout->addWidget(customPlot);
 
-    QLabel* infoLabel = new QLabel("Tip: Select multiple symptoms to compare. Use mouse wheel to zoom, drag to pan.");
+    QLabel *infoLabel = new QLabel("Tip: Select multiple symptoms to compare. Use mouse wheel to zoom, drag to pan.");
     infoLabel->setStyleSheet("color: #666; padding: 10px;");
     infoLabel->setWordWrap(true);
     plotLayout->addWidget(infoLabel);
@@ -260,7 +428,8 @@ void MainWindow::setupStatisticsTab() {
 
     // Connect signals
     connect(generatePlotButton, &QPushButton::clicked, this, &MainWindow::loadStatisticsData);
-    connect(plotTypeSelector, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::onPlotTypeChanged);
+    connect(plotTypeSelector, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &MainWindow::onPlotTypeChanged);
     connect(selectAllButton, &QPushButton::clicked, this, &MainWindow::onSelectAllSymptoms);
     connect(deselectAllButton, &QPushButton::clicked, this, &MainWindow::onDeselectAllSymptoms);
     connect(allDateRangeCheckbox, &QCheckBox::toggled, [this](bool checked) {
@@ -308,9 +477,8 @@ void MainWindow::onUserChanged() {
     bool loggedIn = UserManager::instance().isLoggedIn();
 
     if (loggedIn) {
-        User* user = UserManager::instance().getCurrentUser();
-        QString displayText = user->getDisplayName().isEmpty() ?
-                             user->getUsername() : user->getDisplayName();
+        User *user = UserManager::instance().getCurrentUser();
+        QString displayText = user->getDisplayName().isEmpty() ? user->getUsername() : user->getDisplayName();
         userLabel->setText(QString("User: %1").arg(displayText));
         logoutButton->setEnabled(true);
     } else {
@@ -352,10 +520,15 @@ void MainWindow::onLogout() {
 }
 
 void MainWindow::onTabChanged(int index) {
-    if (index == 1) { // History tab
+    if (index == 1) {
+        // History tab
         loadHistoryData();
-    } else if (index == 2) { // Statistics tab
+    } else if (index == 2) {
+        // Statistics tab
         loadStatisticsData();
+    } else if (index == 3) {
+        // Histograms tab
+        loadHistogramData();
     }
 }
 
@@ -390,29 +563,29 @@ void MainWindow::loadHistoryData() {
     QList<QVariantMap> entries = loadAllEntries();
 
     // Sort by date descending
-    std::sort(entries.begin(), entries.end(), [](const QVariantMap& a, const QVariantMap& b) {
+    std::sort(entries.begin(), entries.end(), [](const QVariantMap &a, const QVariantMap &b) {
         return a["date"].toDate() > b["date"].toDate();
     });
 
     historyTable->setRowCount(entries.size());
 
     for (int i = 0; i < entries.size(); ++i) {
-        const QVariantMap& entry = entries[i];
+        const QVariantMap &entry = entries[i];
 
         // Date
-        QTableWidgetItem* dateItem = new QTableWidgetItem(entry["date"].toDate().toString("yyyy-MM-dd"));
+        QTableWidgetItem *dateItem = new QTableWidgetItem(entry["date"].toDate().toString("yyyy-MM-dd"));
         historyTable->setItem(i, 0, dateItem);
 
         // Sleep duration
         double duration = entry["sleep_duration"].toDouble();
-        QTableWidgetItem* durationItem = new QTableWidgetItem(QString::number(duration, 'f', 1) + " hrs");
+        QTableWidgetItem *durationItem = new QTableWidgetItem(QString::number(duration, 'f', 1) + " hrs");
         historyTable->setItem(i, 1, durationItem);
 
         // For bedtime and wake time, we need to load from the daily file
         QString dataDir = getCurrentDataDirectory();
         QString filename = QString("%1/sleep_%2.dat")
-                              .arg(dataDir)
-                              .arg(entry["date"].toDate().toString("yyyy-MM-dd"));
+                .arg(dataDir)
+                .arg(entry["date"].toDate().toString("yyyy-MM-dd"));
 
         QString bedtimeStr = "-";
         QString waketimeStr = "-";
@@ -439,7 +612,7 @@ void MainWindow::loadHistoryData() {
 
         // Symptoms
         QStringList symptomList;
-        for (const Symptom& s : symptoms) {
+        for (const Symptom &s: symptoms) {
             double value = entry.value(s.getName(), 0.0).toDouble();
             if (value > 0) {
                 if (s.getType() == SymptomType::Binary) {
@@ -450,7 +623,7 @@ void MainWindow::loadHistoryData() {
             }
         }
 
-        QTableWidgetItem* symptomsItem = new QTableWidgetItem(symptomList.join(", "));
+        QTableWidgetItem *symptomsItem = new QTableWidgetItem(symptomList.join(", "));
         historyTable->setItem(i, 4, symptomsItem);
     }
 
@@ -460,7 +633,7 @@ void MainWindow::loadHistoryData() {
 void MainWindow::onHistoryDateSelected(int row, int column) {
     Q_UNUSED(column);
 
-    QTableWidgetItem* dateItem = historyTable->item(row, 0);
+    QTableWidgetItem *dateItem = historyTable->item(row, 0);
     if (!dateItem) return;
 
     QDate selectedDate = QDate::fromString(dateItem->text(), "yyyy-MM-dd");
@@ -468,8 +641,8 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
     // Load the full entry for this date
     QString dataDir = getCurrentDataDirectory();
     QString filename = QString("%1/sleep_%2.dat")
-                          .arg(dataDir)
-                          .arg(selectedDate.toString("yyyy-MM-dd"));
+            .arg(dataDir)
+            .arg(selectedDate.toString("yyyy-MM-dd"));
 
     QString password = UserManager::instance().getCurrentUser()->getEncryptionPassword();
     QByteArray data = DataEncryption::loadEncrypted(filename, password);
@@ -483,14 +656,14 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
         QTime bedtime, waketime;
         double hours;
         QString notes;
-        QList<QPair<QString, double>> symptomData;
+        QList<QPair<QString, double> > symptomData;
 
         in >> timestamp >> date >> bedtime >> waketime >> hours >> notes >> symptomData;
 
         // Show details dialog
         QDialog dialog(this);
         dialog.setWindowTitle(QString("Sleep Entry - %1").arg(date.toString("yyyy-MM-dd")));
-        QVBoxLayout* layout = new QVBoxLayout(&dialog);
+        QVBoxLayout *layout = new QVBoxLayout(&dialog);
 
         layout->addWidget(new QLabel(QString("<b>Date:</b> %1").arg(date.toString("yyyy-MM-dd"))));
         layout->addWidget(new QLabel(QString("<b>Bedtime:</b> %1").arg(bedtime.toString("HH:mm"))));
@@ -498,16 +671,16 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
         layout->addWidget(new QLabel(QString("<b>Sleep duration:</b> %1 hours").arg(hours, 0, 'f', 1)));
 
         layout->addWidget(new QLabel("<b>Notes:</b>"));
-        QTextEdit* notesDisplay = new QTextEdit();
+        QTextEdit *notesDisplay = new QTextEdit();
         notesDisplay->setPlainText(notes);
         notesDisplay->setReadOnly(true);
         notesDisplay->setMaximumHeight(150);
         layout->addWidget(notesDisplay);
 
         layout->addWidget(new QLabel("<b>Symptoms:</b>"));
-        QTextEdit* symptomsDisplay = new QTextEdit();
+        QTextEdit *symptomsDisplay = new QTextEdit();
         QStringList symptomStrings;
-        for (const auto& pair : symptomData) {
+        for (const auto &pair: symptomData) {
             symptomStrings << QString("%1: %2").arg(pair.first).arg(pair.second);
         }
         symptomsDisplay->setPlainText(symptomStrings.join("\n"));
@@ -515,7 +688,7 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
         symptomsDisplay->setMaximumHeight(150);
         layout->addWidget(symptomsDisplay);
 
-        QPushButton* closeButton = new QPushButton("Close");
+        QPushButton *closeButton = new QPushButton("Close");
         connect(closeButton, &QPushButton::clicked, &dialog, &QDialog::accept);
         layout->addWidget(closeButton);
 
@@ -530,7 +703,7 @@ void MainWindow::onDeleteHistoryEntry() {
         return;
     }
 
-    QTableWidgetItem* dateItem = historyTable->item(currentRow, 0);
+    QTableWidgetItem *dateItem = historyTable->item(currentRow, 0);
     if (!dateItem) return;
 
     QDate selectedDate = QDate::fromString(dateItem->text(), "yyyy-MM-dd");
@@ -545,15 +718,15 @@ void MainWindow::onDeleteHistoryEntry() {
         // Delete the daily file
         QString dataDir = getCurrentDataDirectory();
         QString filename = QString("%1/sleep_%2.dat")
-                              .arg(dataDir)
-                              .arg(selectedDate.toString("yyyy-MM-dd"));
+                .arg(dataDir)
+                .arg(selectedDate.toString("yyyy-MM-dd"));
 
         QFile::remove(filename);
 
         // Remove from summary file (C++20 compatible way)
         QList<QVariantMap> entries = loadAllEntries();
         QList<QVariantMap> filteredEntries;
-        for (const auto& entry : entries) {
+        for (const auto &entry: entries) {
             if (entry["date"].toDate() != selectedDate) {
                 filteredEntries.append(entry);
             }
@@ -584,13 +757,13 @@ void MainWindow::loadStatisticsData() {
 
     // Update symptom list if empty
     if (symptomListWidget->count() == 0) {
-        QListWidgetItem* sleepItem = new QListWidgetItem("Sleep Duration");
+        QListWidgetItem *sleepItem = new QListWidgetItem("Sleep Duration");
         sleepItem->setFlags(sleepItem->flags() | Qt::ItemIsUserCheckable);
         sleepItem->setCheckState(Qt::Checked);
         symptomListWidget->addItem(sleepItem);
 
-        for (const Symptom& s : symptoms) {
-            QListWidgetItem* item = new QListWidgetItem(s.getName());
+        for (const Symptom &s: symptoms) {
+            QListWidgetItem *item = new QListWidgetItem(s.getName());
             item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
             item->setCheckState(Qt::Unchecked);
             symptomListWidget->addItem(item);
@@ -600,7 +773,7 @@ void MainWindow::loadStatisticsData() {
     // Get selected symptoms
     QStringList selectedSymptoms;
     for (int i = 0; i < symptomListWidget->count(); ++i) {
-        QListWidgetItem* item = symptomListWidget->item(i);
+        QListWidgetItem *item = symptomListWidget->item(i);
         if (item->checkState() == Qt::Checked) {
             selectedSymptoms.append(item->text());
         }
@@ -632,7 +805,7 @@ void MainWindow::loadStatisticsData() {
     }
 
     // Sort by date
-    std::sort(entries.begin(), entries.end(), [](const QVariantMap& a, const QVariantMap& b) {
+    std::sort(entries.begin(), entries.end(), [](const QVariantMap &a, const QVariantMap &b) {
         return a["date"].toDate() < b["date"].toDate();
     });
 
@@ -649,7 +822,7 @@ void MainWindow::loadStatisticsData() {
         case 2: // Correlation
             if (selectedSymptoms.size() < 2) {
                 QMessageBox::warning(this, "Multiple Selection Required",
-                    "Correlation view requires at least 2 symptoms selected.");
+                                     "Correlation view requires at least 2 symptoms selected.");
                 return;
             }
             plotCorrelationData(entries, selectedSymptoms);
@@ -657,9 +830,10 @@ void MainWindow::loadStatisticsData() {
     }
 }
 
-QList<QVariantMap> MainWindow::filterEntriesByDateRange(const QList<QVariantMap>& entries, const QDate& start, const QDate& end) {
+QList<QVariantMap> MainWindow::filterEntriesByDateRange(const QList<QVariantMap> &entries, const QDate &start,
+                                                        const QDate &end) {
     QList<QVariantMap> filtered;
-    for (const auto& entry : entries) {
+    for (const auto &entry: entries) {
         QDate entryDate = entry["date"].toDate();
         if (entryDate >= start && entryDate <= end) {
             filtered.append(entry);
@@ -668,7 +842,7 @@ QList<QVariantMap> MainWindow::filterEntriesByDateRange(const QList<QVariantMap>
     return filtered;
 }
 
-void MainWindow::plotHistogramData(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms) {
+void MainWindow::plotHistogramData(const QList<QVariantMap> &entries, const QStringList &selectedSymptoms) {
     if (selectedSymptoms.isEmpty()) {
         return;
     }
@@ -684,7 +858,7 @@ void MainWindow::plotHistogramData(const QList<QVariantMap>& entries, const QStr
     }
 }
 
-void MainWindow::plotTimeSeriesData(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms) {
+void MainWindow::plotTimeSeriesData(const QList<QVariantMap> &entries, const QStringList &selectedSymptoms) {
     customPlot->clearGraphs();
     customPlot->clearPlottables();
 
@@ -698,22 +872,22 @@ void MainWindow::plotTimeSeriesData(const QList<QVariantMap>& entries, const QSt
 
     // Color palette for multiple lines
     QVector<QColor> colors = {
-        QColor(33, 150, 243),   // Blue
-        QColor(76, 175, 80),    // Green
-        QColor(255, 152, 0),    // Orange
-        QColor(156, 39, 176),   // Purple
-        QColor(244, 67, 54),    // Red
-        QColor(0, 188, 212),    // Cyan
-        QColor(255, 235, 59),   // Yellow
-        QColor(121, 85, 72)     // Brown
+        QColor(33, 150, 243), // Blue
+        QColor(76, 175, 80), // Green
+        QColor(255, 152, 0), // Orange
+        QColor(156, 39, 176), // Purple
+        QColor(244, 67, 54), // Red
+        QColor(0, 188, 212), // Cyan
+        QColor(255, 235, 59), // Yellow
+        QColor(121, 85, 72) // Brown
     };
 
     int colorIndex = 0;
 
-    for (const QString& symptomName : selectedSymptoms) {
+    for (const QString &symptomName: selectedSymptoms) {
         QVector<double> yData;
 
-        for (const auto& entry : entries) {
+        for (const auto &entry: entries) {
             if (symptomName == "Sleep Duration") {
                 yData.append(entry["sleep_duration"].toDouble());
             } else {
@@ -761,9 +935,9 @@ void MainWindow::plotTimeSeriesData(const QList<QVariantMap>& entries, const QSt
     customPlot->replot();
 }
 
-void MainWindow::plotHistogramOverlay(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms) {
+void MainWindow::plotHistogramOverlay(const QList<QVariantMap> &entries, const QStringList &selectedSymptoms) {
     // --- SAFE CLEANUP BEFORE REBUILD ---
-    for (QPointer<QCPAxis> xAxis : qAsConst(synchronizedXAxes)) {
+    for (QPointer<QCPAxis> xAxis: qAsConst(synchronizedXAxes)) {
         if (xAxis)
             QObject::disconnect(xAxis, nullptr, this, nullptr);
     }
@@ -773,8 +947,8 @@ void MainWindow::plotHistogramOverlay(const QList<QVariantMap>& entries, const Q
     customPlot->clearPlottables();
 
     if (customPlot->plotLayout()->elementCount() == 0) {
-        customPlot->plotLayout()->simplify();  // Reset to default layout
-        QCPAxisRect* axisRect = new QCPAxisRect(customPlot);
+        customPlot->plotLayout()->simplify(); // Reset to default layout
+        QCPAxisRect *axisRect = new QCPAxisRect(customPlot);
         customPlot->plotLayout()->addElement(0, 0, axisRect);
 
         // Reassign axis pointers to the new axis rect
@@ -789,15 +963,15 @@ void MainWindow::plotHistogramOverlay(const QList<QVariantMap>& entries, const Q
     };
 
     // Organize data by date
-    QMap<QDate, QMap<QString, double>> dateData;
-    for (const auto& entry : entries) {
+    QMap<QDate, QMap<QString, double> > dateData;
+    for (const auto &entry: entries) {
         QDate date = QDate::fromString(entry["date"].toString(), Qt::ISODate);
         if (!date.isValid()) continue;
 
-        for (const QString& symptom : selectedSymptoms)
+        for (const QString &symptom: selectedSymptoms)
             dateData[date].insert(symptom, 0.0);
 
-        for (const QString& symptomName : selectedSymptoms) {
+        for (const QString &symptomName: selectedSymptoms) {
             if (symptomName == "Sleep Duration") {
                 dateData[date][symptomName] = entry["sleep_duration"].toDouble();
             } else if (entry.contains(symptomName)) {
@@ -812,7 +986,6 @@ void MainWindow::plotHistogramOverlay(const QList<QVariantMap>& entries, const Q
                 }
             }
         }
-
     }
 
     QList<QDate> dates = dateData.keys();
@@ -823,7 +996,7 @@ void MainWindow::plotHistogramOverlay(const QList<QVariantMap>& entries, const Q
     }
 
     QVector<double> dateNumbers;
-    for (const QDate& date : dates)
+    for (const QDate &date: dates)
         dateNumbers.append(QDateTime(date).toMSecsSinceEpoch() / 1000.0);
 
     double totalSeconds = dateNumbers.last() - dateNumbers.first();
@@ -831,18 +1004,18 @@ void MainWindow::plotHistogramOverlay(const QList<QVariantMap>& entries, const Q
     double maxValue = 0;
 
     for (int i = 0; i < selectedSymptoms.size(); ++i) {
-        const QString& symptom = selectedSymptoms[i];
+        const QString &symptom = selectedSymptoms[i];
         QVector<double> values;
-        for (const QDate& date : dates) {
+        for (const QDate &date: dates) {
             double val = dateData[date].value(symptom, 0.0);
             values.append(val);
             maxValue = std::max(maxValue, val);
         }
 
-        QCPBars* bars = new QCPBars(customPlot->xAxis, customPlot->yAxis);
+        QCPBars *bars = new QCPBars(customPlot->xAxis, customPlot->yAxis);
         QVector<double> offsetDates;
         double offset = (i - (selectedSymptoms.size() - 1) / 2.0) * barWidth * 0.2;
-        for (double d : dateNumbers)
+        for (double d: dateNumbers)
             offsetDates.append(d + offset);
 
         bars->setData(offsetDates, values);
@@ -855,7 +1028,8 @@ void MainWindow::plotHistogramOverlay(const QList<QVariantMap>& entries, const Q
 
     customPlot->xAxis->setLabel("Date");
     customPlot->yAxis->setLabel(selectedSymptoms.contains("Sleep Duration")
-        ? "Value (Count/Hours)" : "Symptom Count");
+                                    ? "Value (Count/Hours)"
+                                    : "Symptom Count");
 
     double xBuffer = (dateNumbers.last() - dateNumbers.first()) * 0.5;
     customPlot->xAxis->setRange(dateNumbers.first() - xBuffer, dateNumbers.last() + xBuffer);
@@ -873,40 +1047,199 @@ void MainWindow::plotHistogramOverlay(const QList<QVariantMap>& entries, const Q
     customPlot->replot();
 }
 
-void MainWindow::plotHistogramStacked(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms) {
-    // --- CRITICAL FIX: Disconnect ALL signals before clearing ---
-    // This is ESSENTIAL for preventing crashes when switching to other plot types.
-    for (QPointer<QCPAxis> xAxis : qAsConst(synchronizedXAxes)) {
+// void MainWindow::plotHistogramStacked(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms) {
+//     //qcustomplot
+//     for (QPointer<QCPAxis> xAxis : qAsConst(synchronizedXAxes)) {
+//         if (xAxis) {
+//             // Disconnect ALL signals from this axis to ALL receivers
+//             QObject::disconnect(xAxis, nullptr, this, nullptr);
+//         }
+//     }
+//     synchronizedXAxes.clear(); // Clear the list of potentially dangling pointers
+//
+//     // Also disconnect the syncXAxes slot from ANY sender that might still be connected
+//     // NOTE: This uses the old-style disconnect since the signature is ambiguous across C++ versions.
+//     disconnect(this, SLOT(syncXAxes(QCPRange)));
+//
+//     customPlot->setNoAntialiasingOnDrag(true);
+//     customPlot->clearGraphs();
+//     customPlot->clearPlottables();
+//
+//     // Now safe to clear layout since all signal connections are gone
+//     customPlot->plotLayout()->clear();
+//
+//     QMap<QDate, QMap<QString, double>> dateData;
+//
+//     for (const auto& entry : entries) {
+//         QDate date = entry["date"].toDate();
+//         if (!date.isValid()) continue;
+//
+//         auto& dateMap = dateData[date];
+//         for (const QString& s : selectedSymptoms)
+//             if (!dateMap.contains(s))
+//                 dateMap[s] = 0.0;
+//
+//         for (const QString& s : selectedSymptoms) {
+//             if (s == "Sleep Duration") {
+//                 dateMap[s] = entry["sleep_duration"].toDouble();
+//             } else if (entry.contains(s)) {
+//                 QVariant value = entry[s];
+//                 if (value.type() == QVariant::Bool) {
+//                     if (value.toBool()) dateMap[s] += 1.0;
+//                 } else dateMap[s] += value.toDouble();
+//             }
+//         }
+//     }
+//
+//     QList<QDate> dates = dateData.keys();
+//     std::sort(dates.begin(), dates.end());
+//     if (dates.isEmpty()) {
+//         customPlot->replot();
+//         return;
+//     }
+//
+//     QVector<double> dateNumbers;
+//     for (const QDate& date : dates)
+//         dateNumbers.append(date.startOfDay().toMSecsSinceEpoch() / 1000.0);
+//
+//     double minDate = dateNumbers.first();
+//     double maxDate = dateNumbers.last();
+//     double xBuffer = (maxDate - minDate) * 0.5;
+//     double barWidth = (maxDate - minDate) / (dates.size() * 1.2);
+//
+//     QVector<QVector<double>> symptomValues(selectedSymptoms.size());
+//     QVector<double> maxY(selectedSymptoms.size(), 0.0);
+//
+//     for (int i = 0; i < selectedSymptoms.size(); ++i) {
+//         const QString& name = selectedSymptoms[i];
+//         QVector<double>& vals = symptomValues[i];
+//         for (const QDate& date : dates) {
+//             double v = dateData[date].value(name, 0.0);
+//             vals.append(v);
+//             maxY[i] = std::max(maxY[i], v);
+//         }
+//     }
+//
+//     int numPlots = selectedSymptoms.size();
+//     synchronizedXAxes.clear();
+//     synchronizedXAxes.reserve(numPlots);
+//
+//     // Color palette
+//     QVector<QColor> colors = {
+//         QColor(33, 150, 243, 150), QColor(76, 175, 80, 150),
+//         QColor(255, 152, 0, 150), QColor(156, 39, 176, 150),
+//         QColor(244, 67, 54, 150), QColor(0, 188, 212, 150)
+//     };
+//
+//     for (int i = 0; i < numPlots; ++i) {
+//         QCPAxisRect* axisRect = new QCPAxisRect(customPlot);
+//         customPlot->plotLayout()->addElement(i, 0, axisRect);
+//
+//         QCPAxis* xAxis = axisRect->axis(QCPAxis::atBottom);
+//         QCPAxis* yAxis = axisRect->axis(QCPAxis::atLeft);
+//         synchronizedXAxes.append(xAxis); // Store the axis pointer
+//
+//         QCPBars* bars = new QCPBars(xAxis, yAxis);
+//         bars->setData(dateNumbers, symptomValues[i]);
+//         QColor color = colors[i % colors.size()];
+//         bars->setPen(QPen(color));
+//         bars->setBrush(QBrush(color));
+//         bars->setWidth(barWidth);
+//
+//         if (i == numPlots - 1) {
+//             QSharedPointer<QCPAxisTickerDateTime> ticker(new QCPAxisTickerDateTime);
+//             ticker->setDateTimeFormat("MMM d");
+//             xAxis->setTicker(ticker);
+//             xAxis->setLabel("Date");
+//         } else {
+//             xAxis->setTickLabels(false);
+//         }
+//
+//         yAxis->setLabel(selectedSymptoms[i] == "Sleep Duration" ? "Hours" : "Count");
+//         yAxis->setRange(0, maxY[i] * 1.1);
+//         xAxis->setRange(minDate - xBuffer, maxDate + xBuffer);
+//
+//         QCPTextElement* title = new QCPTextElement(customPlot, selectedSymptoms[i]);
+//         axisRect->insetLayout()->addElement(title, Qt::AlignTop | Qt::AlignHCenter);
+//     }
+//
+//     // Connect synchronization AFTER all axes are created and added
+//     // --- CRITICAL FIX: Use the argument-taking syncXAxes slot ---
+//     for (int i = 0; i < synchronizedXAxes.size(); ++i) {
+//         QPointer<QCPAxis> xAxis = synchronizedXAxes[i];
+//         if (xAxis) {
+//             // Connect to the argument-taking slot, which is safe from recursion
+//             connect(xAxis, QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
+//                     this, &MainWindow::syncXAxes, Qt::UniqueConnection);
+//         }
+//     }
+//     // --- END CRITICAL FIX ---
+//
+//     customPlot->setNotAntialiasedElements(QCP::aeNone);
+//     customPlot->replot();
+// }
+
+// In your MainWindow constructor or initialization:
+void MainWindow::initializeHistogram() {
+    // Enable mouse tracking
+    histogramCustomPlot->setMouseTracking(true);
+
+    // Configure zooming behavior
+    histogramCustomPlot->axisRect()->setRangeZoomFactor(0.85); // Slower zoom
+    histogramCustomPlot->axisRect()->setRangeDrag(0); // Start with no drag
+
+    // Add zoom instructions to tooltip
+    histogramCustomPlot->setToolTip("Scroll: Vertical zoom\nDrag: Horizontal scroll\nRight-click: Context menu");
+}
+
+void MainWindow::showHistogramContextMenu(const QPoint &pos) {
+    QMenu *menu = new QMenu(this);
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+
+    QAction *resetZoomAction = menu->addAction("Reset Zoom");
+    connect(resetZoomAction, &QAction::triggered, this, &MainWindow::resetHistogramZoom);
+
+    menu->popup(histogramCustomPlot->mapToGlobal(pos));
+}
+
+void MainWindow::resetHistogramZoom() {
+    // Replot with original ranges
+    // You might want to store the original date ranges and replot
+    histogramCustomPlot->rescaleAxes();
+    histogramCustomPlot->replot();
+}
+
+void MainWindow::plotHistogramStacked(const QList<QVariantMap> &entries, const QStringList &selectedSymptoms) {
+    // Clear previous synchronization
+    for (QPointer<QCPAxis> xAxis: qAsConst(synchronizedXAxes)) {
         if (xAxis) {
-            // Disconnect ALL signals from this axis to ALL receivers
             QObject::disconnect(xAxis, nullptr, this, nullptr);
         }
     }
-    synchronizedXAxes.clear(); // Clear the list of potentially dangling pointers
-
-    // Also disconnect the syncXAxes slot from ANY sender that might still be connected
-    // NOTE: This uses the old-style disconnect since the signature is ambiguous across C++ versions.
+    synchronizedXAxes.clear();
     disconnect(this, SLOT(syncXAxes(QCPRange)));
 
-    customPlot->setNoAntialiasingOnDrag(true);
-    customPlot->clearGraphs();
-    customPlot->clearPlottables();
+    // Use histogramCustomPlot instead of customPlot
+    histogramCustomPlot->setNoAntialiasingOnDrag(true);
+    histogramCustomPlot->clearGraphs();
+    histogramCustomPlot->clearPlottables();
+    histogramCustomPlot->plotLayout()->clear();
 
-    // Now safe to clear layout since all signal connections are gone
-    customPlot->plotLayout()->clear();
+    // Enable interactions for scrolling and zooming
+    histogramCustomPlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectPlottables);
 
-    QMap<QDate, QMap<QString, double>> dateData;
+    QMap<QDate, QMap<QString, double> > dateData;
 
-    for (const auto& entry : entries) {
+    for (const auto &entry: entries) {
         QDate date = entry["date"].toDate();
         if (!date.isValid()) continue;
 
-        auto& dateMap = dateData[date];
-        for (const QString& s : selectedSymptoms)
+        auto &dateMap = dateData[date];
+        for (const QString &s: selectedSymptoms)
             if (!dateMap.contains(s))
                 dateMap[s] = 0.0;
 
-        for (const QString& s : selectedSymptoms) {
+        for (const QString &s: selectedSymptoms) {
             if (s == "Sleep Duration") {
                 dateMap[s] = entry["sleep_duration"].toDouble();
             } else if (entry.contains(s)) {
@@ -921,26 +1254,26 @@ void MainWindow::plotHistogramStacked(const QList<QVariantMap>& entries, const Q
     QList<QDate> dates = dateData.keys();
     std::sort(dates.begin(), dates.end());
     if (dates.isEmpty()) {
-        customPlot->replot();
+        histogramCustomPlot->replot();
         return;
     }
 
     QVector<double> dateNumbers;
-    for (const QDate& date : dates)
+    for (const QDate &date: dates)
         dateNumbers.append(date.startOfDay().toMSecsSinceEpoch() / 1000.0);
 
     double minDate = dateNumbers.first();
     double maxDate = dateNumbers.last();
-    double xBuffer = (maxDate - minDate) * 0.5;
+    double xBuffer = (maxDate - minDate) * 0.1; // Reduced buffer for better scrolling
     double barWidth = (maxDate - minDate) / (dates.size() * 1.2);
 
-    QVector<QVector<double>> symptomValues(selectedSymptoms.size());
+    QVector<QVector<double> > symptomValues(selectedSymptoms.size());
     QVector<double> maxY(selectedSymptoms.size(), 0.0);
 
     for (int i = 0; i < selectedSymptoms.size(); ++i) {
-        const QString& name = selectedSymptoms[i];
-        QVector<double>& vals = symptomValues[i];
-        for (const QDate& date : dates) {
+        const QString &name = selectedSymptoms[i];
+        QVector<double> &vals = symptomValues[i];
+        for (const QDate &date: dates) {
             double v = dateData[date].value(name, 0.0);
             vals.append(v);
             maxY[i] = std::max(maxY[i], v);
@@ -959,56 +1292,71 @@ void MainWindow::plotHistogramStacked(const QList<QVariantMap>& entries, const Q
     };
 
     for (int i = 0; i < numPlots; ++i) {
-        QCPAxisRect* axisRect = new QCPAxisRect(customPlot);
-        customPlot->plotLayout()->addElement(i, 0, axisRect);
+        QCPAxisRect *axisRect = new QCPAxisRect(histogramCustomPlot);
+        histogramCustomPlot->plotLayout()->addElement(i, 0, axisRect);
 
-        QCPAxis* xAxis = axisRect->axis(QCPAxis::atBottom);
-        QCPAxis* yAxis = axisRect->axis(QCPAxis::atLeft);
-        synchronizedXAxes.append(xAxis); // Store the axis pointer
+        // Configure axis rect for zooming and scrolling
+        axisRect->setRangeDrag(Qt::Horizontal);  // Allow horizontal dragging (scrolling)
+        axisRect->setRangeZoom(Qt::Vertical);    // Allow vertical zooming
+        axisRect->setRangeZoomAxes(axisRect->axis(QCPAxis::atBottom), axisRect->axis(QCPAxis::atLeft));
 
-        QCPBars* bars = new QCPBars(xAxis, yAxis);
+        QCPAxis *xAxis = axisRect->axis(QCPAxis::atBottom);
+        QCPAxis *yAxis = axisRect->axis(QCPAxis::atLeft);
+        synchronizedXAxes.append(xAxis);
+
+        QCPBars *bars = new QCPBars(xAxis, yAxis);
         bars->setData(dateNumbers, symptomValues[i]);
         QColor color = colors[i % colors.size()];
         bars->setPen(QPen(color));
         bars->setBrush(QBrush(color));
         bars->setWidth(barWidth);
 
+        // Set up date formatting for x-axis
+        QSharedPointer<QCPAxisTickerDateTime> ticker(new QCPAxisTickerDateTime);
+        ticker->setDateTimeFormat("MMM d");
+
         if (i == numPlots - 1) {
-            QSharedPointer<QCPAxisTickerDateTime> ticker(new QCPAxisTickerDateTime);
-            ticker->setDateTimeFormat("MMM d");
             xAxis->setTicker(ticker);
             xAxis->setLabel("Date");
         } else {
-            xAxis->setTickLabels(false);
+            xAxis->setTicker(ticker);
+            xAxis->setTickLabels(false); // Only show labels on bottom plot
         }
 
         yAxis->setLabel(selectedSymptoms[i] == "Sleep Duration" ? "Hours" : "Count");
         yAxis->setRange(0, maxY[i] * 1.1);
+
+        // Set initial X range with some padding
         xAxis->setRange(minDate - xBuffer, maxDate + xBuffer);
 
-        QCPTextElement* title = new QCPTextElement(customPlot, selectedSymptoms[i]);
+        QCPTextElement *title = new QCPTextElement(histogramCustomPlot, selectedSymptoms[i]);
         axisRect->insetLayout()->addElement(title, Qt::AlignTop | Qt::AlignHCenter);
+
+        // Add margin to prevent title overlap
+        axisRect->setAutoMargins(QCP::msLeft | QCP::msRight | QCP::msBottom);
+        axisRect->setMargins(QMargins(50, 40, 50, 30));
     }
 
-    // Connect synchronization AFTER all axes are created and added
-    // --- CRITICAL FIX: Use the argument-taking syncXAxes slot ---
+    // Connect synchronization for all x-axes
     for (int i = 0; i < synchronizedXAxes.size(); ++i) {
         QPointer<QCPAxis> xAxis = synchronizedXAxes[i];
         if (xAxis) {
-            // Connect to the argument-taking slot, which is safe from recursion
-            connect(xAxis, QOverload<const QCPRange&>::of(&QCPAxis::rangeChanged),
+            connect(xAxis, QOverload<const QCPRange &>::of(&QCPAxis::rangeChanged),
                     this, &MainWindow::syncXAxes, Qt::UniqueConnection);
         }
     }
-    // --- END CRITICAL FIX ---
 
-    customPlot->setNotAntialiasedElements(QCP::aeNone);
-    customPlot->replot();
+    // Add context menu for resetting zoom
+    histogramCustomPlot->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(histogramCustomPlot, &QCustomPlot::customContextMenuRequested,
+            this, &MainWindow::showHistogramContextMenu);
+
+    histogramCustomPlot->setNotAntialiasedElements(QCP::aeNone);
+    histogramCustomPlot->replot();
 }
 
-// Change in your source file (mainwindow.cpp):
-void MainWindow::syncXAxes(const QCPRange& newRange) {
-    QCPAxis* senderAxis = qobject_cast<QCPAxis*>(sender());
+void MainWindow::syncXAxes(const QCPRange &newRange) {
+    QCPAxis *senderAxis = qobject_cast<QCPAxis *>(sender());
     if (!senderAxis || !customPlot || !customPlot->plotLayout())
         return;
 
@@ -1024,7 +1372,7 @@ void MainWindow::syncXAxes(const QCPRange& newRange) {
     bool oldPlotBlock = customPlot->blockSignals(true);
 
     // 1. Iterate over the synchronized axes
-    for (QPointer<QCPAxis> targetAxis : qAsConst(synchronizedXAxes)) {
+    for (QPointer<QCPAxis> targetAxis: qAsConst(synchronizedXAxes)) {
         // 2. CRITICAL CHECK: Ensure the axis is still alive and is not the sender
         if (targetAxis && targetAxis.data() != senderAxis) {
             // 3. Set the range only if it's different
@@ -1044,7 +1392,7 @@ void MainWindow::syncXAxes(const QCPRange& newRange) {
     customPlot->replot(QCustomPlot::rpQueuedReplot);
 }
 
-void MainWindow::plotCorrelationData(const QList<QVariantMap>& entries, const QStringList& selectedSymptoms) {
+void MainWindow::plotCorrelationData(const QList<QVariantMap> &entries, const QStringList &selectedSymptoms) {
     customPlot->clearGraphs();
     customPlot->clearPlottables();
 
@@ -1053,11 +1401,11 @@ void MainWindow::plotCorrelationData(const QList<QVariantMap>& entries, const QS
     QString baseSymptom = selectedSymptoms.first();
 
     QVector<QColor> colors = {
-        QColor(76, 175, 80),    // Green
-        QColor(255, 152, 0),    // Orange
-        QColor(156, 39, 176),   // Purple
-        QColor(244, 67, 54),    // Red
-        QColor(0, 188, 212),    // Cyan
+        QColor(76, 175, 80), // Green
+        QColor(255, 152, 0), // Orange
+        QColor(156, 39, 176), // Purple
+        QColor(244, 67, 54), // Red
+        QColor(0, 188, 212), // Cyan
     };
 
     for (int i = 1; i < selectedSymptoms.size(); ++i) {
@@ -1065,13 +1413,13 @@ void MainWindow::plotCorrelationData(const QList<QVariantMap>& entries, const QS
 
         QVector<double> xData, yData;
 
-        for (const auto& entry : entries) {
-            double xVal = (baseSymptom == "Sleep Duration") ?
-                         entry["sleep_duration"].toDouble() :
-                         entry.value(baseSymptom, 0.0).toDouble();
-            double yVal = (compareSymptom == "Sleep Duration") ?
-                         entry["sleep_duration"].toDouble() :
-                         entry.value(compareSymptom, 0.0).toDouble();
+        for (const auto &entry: entries) {
+            double xVal = (baseSymptom == "Sleep Duration")
+                              ? entry["sleep_duration"].toDouble()
+                              : entry.value(baseSymptom, 0.0).toDouble();
+            double yVal = (compareSymptom == "Sleep Duration")
+                              ? entry["sleep_duration"].toDouble()
+                              : entry.value(compareSymptom, 0.0).toDouble();
 
             xData.append(xVal);
             yData.append(yVal);
@@ -1082,7 +1430,7 @@ void MainWindow::plotCorrelationData(const QList<QVariantMap>& entries, const QS
         customPlot->graph()->setName(QString("%1 vs %2").arg(baseSymptom).arg(compareSymptom));
         customPlot->graph()->setLineStyle(QCPGraph::lsNone);
 
-        QColor color = colors[(i-1) % colors.size()];
+        QColor color = colors[(i - 1) % colors.size()];
         customPlot->graph()->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, color, color, 7));
     }
 
@@ -1107,26 +1455,32 @@ void MainWindow::plotCorrelationData(const QList<QVariantMap>& entries, const QS
     customPlot->replot();
 }
 
+// void MainWindow::onPlotTypeChanged(int index) {
+//     // Show/hide histogram mode selector based on plot type
+//     bool isHistogram = (index == 1);
+//     histogramModeSelector->setVisible(isHistogram);
+//
+//     // Find the label before the histogram mode selector and show/hide it too
+//     QLabel* histogramLabel = nullptr;
+//     QVBoxLayout* layout = qobject_cast<QVBoxLayout*>(histogramModeSelector->parentWidget()->layout());
+//     if (layout) {
+//         int idx = layout->indexOf(histogramModeSelector);
+//         if (idx > 0) {
+//             QLayoutItem* item = layout->itemAt(idx - 1);
+//             if (item && item->widget()) {
+//                 histogramLabel = qobject_cast<QLabel*>(item->widget());
+//                 if (histogramLabel && histogramLabel->text() == "Histogram Mode:") {
+//                     histogramLabel->setVisible(isHistogram);
+//                 }
+//             }
+//         }
+//     }
+// }
 void MainWindow::onPlotTypeChanged(int index) {
-    // Show/hide histogram mode selector based on plot type
+    // Only show histogram mode selector if histogram is selected in statistics tab
+    // Since we moved stacked histograms to their own tab, we can remove this logic
+    // or keep only overlay histogram in statistics tab
     bool isHistogram = (index == 1);
-    histogramModeSelector->setVisible(isHistogram);
-
-    // Find the label before the histogram mode selector and show/hide it too
-    QLabel* histogramLabel = nullptr;
-    QVBoxLayout* layout = qobject_cast<QVBoxLayout*>(histogramModeSelector->parentWidget()->layout());
-    if (layout) {
-        int idx = layout->indexOf(histogramModeSelector);
-        if (idx > 0) {
-            QLayoutItem* item = layout->itemAt(idx - 1);
-            if (item && item->widget()) {
-                histogramLabel = qobject_cast<QLabel*>(item->widget());
-                if (histogramLabel && histogramLabel->text() == "Histogram Mode:") {
-                    histogramLabel->setVisible(isHistogram);
-                }
-            }
-        }
-    }
 }
 
 void MainWindow::onSelectAllSymptoms() {
@@ -1206,7 +1560,7 @@ void MainWindow::saveSymptoms() {
 
     out << static_cast<qint32>(symptoms.size());
 
-    for (const Symptom& s : symptoms) {
+    for (const Symptom &s: symptoms) {
         out << s.getName() << Symptom::typeToString(s.getType()) << s.getUnit();
     }
 
@@ -1219,8 +1573,8 @@ void MainWindow::rebuildSymptomWidgets() {
     symptomWidgets.clear();
 
     // Create new widgets
-    for (const Symptom& s : symptoms) {
-        SymptomWidget* widget = new SymptomWidget(s);
+    for (const Symptom &s: symptoms) {
+        SymptomWidget *widget = new SymptomWidget(s);
         symptomWidgets.append(widget);
         symptomsLayout->addWidget(widget);
     }
@@ -1233,16 +1587,16 @@ void MainWindow::showAddSymptomDialog() {
     dialog.setWindowTitle("Add New Symptom");
     dialog.setModal(true);
 
-    QVBoxLayout* layout = new QVBoxLayout(&dialog);
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
 
     // Name
     layout->addWidget(new QLabel("Symptom Name:"));
-    QLineEdit* nameEdit = new QLineEdit();
+    QLineEdit *nameEdit = new QLineEdit();
     layout->addWidget(nameEdit);
 
     // Type
     layout->addWidget(new QLabel("Type:"));
-    QComboBox* typeCombo = new QComboBox();
+    QComboBox *typeCombo = new QComboBox();
     typeCombo->addItem("Yes/No (Binary)", QVariant::fromValue(SymptomType::Binary));
     typeCombo->addItem("Count (e.g., times woke up)", QVariant::fromValue(SymptomType::Count));
     typeCombo->addItem("Quantity (e.g., drinks, mg)", QVariant::fromValue(SymptomType::Quantity));
@@ -1250,14 +1604,14 @@ void MainWindow::showAddSymptomDialog() {
 
     // Unit
     layout->addWidget(new QLabel("Unit (optional, for Count/Quantity):"));
-    QLineEdit* unitEdit = new QLineEdit();
+    QLineEdit *unitEdit = new QLineEdit();
     unitEdit->setPlaceholderText("e.g., times, drinks, mg, hours");
     layout->addWidget(unitEdit);
 
     // Buttons
-    QHBoxLayout* buttonLayout = new QHBoxLayout();
-    QPushButton* okButton = new QPushButton("Add");
-    QPushButton* cancelButton = new QPushButton("Cancel");
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    QPushButton *okButton = new QPushButton("Add");
+    QPushButton *cancelButton = new QPushButton("Cancel");
     buttonLayout->addWidget(okButton);
     buttonLayout->addWidget(cancelButton);
     layout->addLayout(buttonLayout);
@@ -1273,7 +1627,7 @@ void MainWindow::showAddSymptomDialog() {
 
             // Check if already exists
             bool exists = false;
-            for (const Symptom& s : symptoms) {
+            for (const Symptom &s: symptoms) {
                 if (s.getName() == name) {
                     exists = true;
                     break;
@@ -1301,7 +1655,7 @@ void MainWindow::onClearForm() {
     bedtimeEdit->setTime(QTime(22, 0));
     wakeupEdit->setTime(QTime(7, 0));
 
-    for (SymptomWidget* widget : symptomWidgets) {
+    for (SymptomWidget *widget: symptomWidgets) {
         widget->reset();
     }
 }
@@ -1310,7 +1664,7 @@ QString MainWindow::getCurrentDataDirectory() {
     QString username = "default";
 
     if (UserManager::instance().isLoggedIn()) {
-        User* user = UserManager::instance().getCurrentUser();
+        User *user = UserManager::instance().getCurrentUser();
         if (user) {
             username = user->getUsername();
         }
@@ -1340,8 +1694,8 @@ bool MainWindow::saveEntry() {
 
     // Create filename with date
     QString filename = QString("%1/sleep_%2.dat")
-                          .arg(dataDir)
-                          .arg(dateEdit->date().toString("yyyy-MM-dd"));
+            .arg(dataDir)
+            .arg(dateEdit->date().toString("yyyy-MM-dd"));
 
     // Calculate sleep duration
     QDateTime bedDateTime(dateEdit->date(), bedtimeEdit->time());
@@ -1352,8 +1706,8 @@ bool MainWindow::saveEntry() {
     double hours = bedDateTime.secsTo(wakeDateTime) / 3600.0;
 
     // Collect symptom data
-    QList<QPair<QString, double>> symptomData;
-    for (SymptomWidget* widget : symptomWidgets) {
+    QList<QPair<QString, double> > symptomData;
+    for (SymptomWidget *widget: symptomWidgets) {
         Symptom s = widget->getSymptom();
         if (s.isPresent()) {
             symptomData.append(qMakePair(s.getName(), s.getValue()));
@@ -1368,12 +1722,12 @@ bool MainWindow::saveEntry() {
     out.setVersion(QDataStream::Qt_5_15);
 
     out << QDateTime::currentDateTime()
-        << dateEdit->date()
-        << bedtimeEdit->time()
-        << wakeupEdit->time()
-        << hours
-        << notes
-        << symptomData;
+            << dateEdit->date()
+            << bedtimeEdit->time()
+            << wakeupEdit->time()
+            << hours
+            << notes
+            << symptomData;
 
     if (!DataEncryption::saveEncrypted(filename, data, password)) {
         QMessageBox::critical(this, "Error", "Could not save entry!");
@@ -1411,7 +1765,7 @@ bool MainWindow::saveSummaryEntry() {
     entry["sleep_duration"] = hours;
 
     // Add symptom values
-    for (SymptomWidget* widget : symptomWidgets) {
+    for (SymptomWidget *widget: symptomWidgets) {
         Symptom s = widget->getSymptom();
         entry[s.getName()] = s.getValue();
     }

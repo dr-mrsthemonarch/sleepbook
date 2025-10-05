@@ -34,6 +34,8 @@ set(HEADERS
         classes/user.h
         classes/dataencryption.h
         classes/qcustomplot.h
+        classes/histogramwidget.cpp
+        classes/histogramwidget.h
 )
 
 # Create executable
