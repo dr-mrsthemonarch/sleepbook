@@ -40,6 +40,9 @@ set(HEADERS
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/../binary)
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 
+# Add OpenGL definition for QCustomPlot
+target_compile_definitions(${PROJECT_NAME} PRIVATE QCUSTOMPLOT_USE_OPENGL)
+
 # Link Qt5 libraries
 target_link_libraries(${PROJECT_NAME}
         Qt5::Core
