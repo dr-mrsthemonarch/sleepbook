@@ -27,7 +27,7 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::setupUI() {
-    setWindowTitle("Sleep Quality Tracker");
+    setWindowTitle("Sleepbook");
     resize(1200, 800); // Slightly wider to accommodate more tabs
 
     QWidget *centralWidget = new QWidget(this);
@@ -43,12 +43,12 @@ void MainWindow::setupUI() {
     setupEntryTab();
     setupHistoryTab();
     setupStatisticsTab();
-    setupHistogramTab(); // New tab for stacked histograms
+    setupHistogramTab();
 
     tabWidget->addTab(entryTab, "New Entry");
     tabWidget->addTab(historyTab, "History");
-    tabWidget->addTab(statisticsTab, "Statistics");
-    tabWidget->addTab(histogramTab, "Histograms"); // New tab
+    tabWidget->addTab(statisticsTab, "Plots");
+    tabWidget->addTab(histogramTab, "Histograms");
 
     connect(tabWidget, &QTabWidget::currentChanged, this, &MainWindow::onTabChanged);
 }
@@ -241,12 +241,12 @@ void MainWindow::setupEntryTab() {
     QHBoxLayout *timeLayout = new QHBoxLayout();
     timeLayout->addWidget(new QLabel("Bedtime:"));
     bedtimeEdit = new QTimeEdit();
-    bedtimeEdit->setTime(QTime(22, 0));
+    bedtimeEdit->setTime(QTime(01, 0));
     timeLayout->addWidget(bedtimeEdit);
 
     timeLayout->addWidget(new QLabel("Wake time:"));
     wakeupEdit = new QTimeEdit();
-    wakeupEdit->setTime(QTime(7, 0));
+    wakeupEdit->setTime(QTime(8, 30));
     timeLayout->addWidget(wakeupEdit);
     timeLayout->addStretch();
     leftLayout->addLayout(timeLayout);
@@ -467,7 +467,7 @@ void MainWindow::createUserToolbar() {
 }
 
 void MainWindow::updateWindowTitle() {
-    QString title = "Sleep Quality Tracker";
+    QString title = "Sleep and Health Logbook";
     if (UserManager::instance().isLoggedIn()) {
         title += QString(" - %1").arg(UserManager::instance().getCurrentUsername());
     }
@@ -999,6 +999,7 @@ void MainWindow::plotHistogramOverlay(const QList<QVariantMap> &entries, const Q
     QVector<double> dateNumbers;
     for (const QDate &date: dates)
         dateNumbers.append(QDateTime(date).toMSecsSinceEpoch() / 1000.0);
+        // dateNumbers.append((date.startOfDay().addSecs(12 * 3600)).toMSecsSinceEpoch() / 1000.0);
 
     double totalSeconds = dateNumbers.last() - dateNumbers.first();
     double barWidth = totalSeconds / (dates.size() * selectedSymptoms.size() * 1.5);
@@ -1261,12 +1262,16 @@ void MainWindow::plotHistogramStacked(const QList<QVariantMap> &entries, const Q
 
     QVector<double> dateNumbers;
     for (const QDate &date: dates)
-        dateNumbers.append(date.startOfDay().toMSecsSinceEpoch() / 1000.0);
+        // dateNumbers.append(date.startOfDay().toMSecsSinceEpoch() / 1000.0);
+            // Each QDate converted to a time representing the *middle* of the day
+                dateNumbers.append((date.startOfDay().addSecs(12 * 3600)).toMSecsSinceEpoch() / 1000.0);
+
+
 
     double minDate = dateNumbers.first();
     double maxDate = dateNumbers.last();
-    double xBuffer = (maxDate - minDate) * 0.1; // Reduced buffer for better scrolling
-    double barWidth = (maxDate - minDate) / (dates.size() * 1.2);
+    double xBuffer = (maxDate - minDate) * 2; // Reduced buffer for better scrolling
+    double barWidth = (maxDate - minDate) / (dates.size() );
 
     QVector<QVector<double> > symptomValues(selectedSymptoms.size());
     QVector<double> maxY(selectedSymptoms.size(), 0.0);
@@ -1653,8 +1658,8 @@ void MainWindow::onAddSymptom() {
 void MainWindow::onClearForm() {
     notesEdit->clear();
     dateEdit->setDate(QDate::currentDate());
-    bedtimeEdit->setTime(QTime(22, 0));
-    wakeupEdit->setTime(QTime(7, 0));
+    bedtimeEdit->setTime(QTime(01, 0));
+    wakeupEdit->setTime(QTime(8, 30));
 
     for (SymptomWidget *widget: symptomWidgets) {
         widget->reset();

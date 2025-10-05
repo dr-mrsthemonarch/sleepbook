@@ -11,13 +11,13 @@ LoginDialog::LoginDialog(QWidget* parent)
 }
 
 void LoginDialog::setupUI() {
-    setWindowTitle("Sleep Tracker - Login");
+    setWindowTitle("Sleepbook - Login");
     setModal(true);
     setMinimumWidth(400);
     
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
     
-    QLabel* titleLabel = new QLabel("Welcome to Sleep Quality Tracker");
+    QLabel* titleLabel = new QLabel("Welcome to Sleepbook");
     titleLabel->setStyleSheet("font-size: 16px; font-weight: bold; padding: 10px;");
     titleLabel->setAlignment(Qt::AlignCenter);
     mainLayout->addWidget(titleLabel);
