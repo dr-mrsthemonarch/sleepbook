@@ -1,52 +1,28 @@
-
 cmake_minimum_required(VERSION 3.16)
-project(sleepbook)
+project(sleepbook LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Build type configuration
+# Default build type
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# Release optimizations
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    # Compiler-specific optimizations
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-        target_compile_options(${PROJECT_NAME} PRIVATE
-                -O3                    # Maximum optimization
-                -DNDEBUG              # Disable debug assertions
-                -march=native         # Optimize for current CPU architecture
-                -flto                 # Link-time optimization
-                -ffast-math           # Fast math optimizations
-                -funroll-loops        # Unroll loops for better performance
-        )
-        target_link_options(${PROJECT_NAME} PRIVATE
-                -flto                 # Link-time optimization
-                -s                    # Strip symbols
-        )
-    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-        target_compile_options(${PROJECT_NAME} PRIVATE
-                /O2                   # Maximum optimization
-                /DNDEBUG             # Disable debug assertions
-                /GL                  # Whole program optimization
-        )
-        target_link_options(${PROJECT_NAME} PRIVATE
-                /LTCG                # Link-time code generation
-        )
-    endif()
-endif()
+# Output directories
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/../binary)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/../binary)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/../binary)
 
 # Find Qt5
 find_package(Qt5 REQUIRED COMPONENTS Core Widgets OpenGL)
 
-# Enable automatic MOC, UIC, and RCC
+# Enable automatic Qt tools
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-# Source files
+# Sources
 set(SOURCES
         main.cpp
         classes/mainwindow.cpp
@@ -75,10 +51,9 @@ set(HEADERS
 )
 
 # Create executable
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/../binary)
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 
-# Add OpenGL definition for QCustomPlot
+# Enable OpenGL in QCustomPlot
 target_compile_definitions(${PROJECT_NAME} PRIVATE QCUSTOMPLOT_USE_OPENGL)
 
 # Link Qt5 libraries
@@ -88,13 +63,46 @@ target_link_libraries(${PROJECT_NAME}
         Qt5::OpenGL
 )
 
-# For macOS app bundles
+# --- Platform-specific optimization flags ---
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    if(MSVC)
+        # Windows (MSVC)
+        target_compile_options(${PROJECT_NAME} PRIVATE
+                /O2      # Optimize for speed
+                /DNDEBUG # Disable assertions
+                /GL      # Whole Program Optimization
+        )
+        target_link_options(${PROJECT_NAME} PRIVATE
+                /LTCG    # Link-time code generation
+        )
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        # Linux/macOS (GCC or Clang)
+        target_compile_options(${PROJECT_NAME} PRIVATE
+                -O3
+                -DNDEBUG
+                -flto
+                -ffast-math
+                -funroll-loops
+        )
+        target_link_options(${PROJECT_NAME} PRIVATE
+                -flto
+                -s
+        )
+    endif()
+endif()
+
+# --- macOS bundle settings ---
 if(APPLE)
-    set_target_properties(sleepbook PROPERTIES
-            AUTOMOC ON
+    set_target_properties(${PROJECT_NAME} PROPERTIES
             MACOSX_BUNDLE TRUE
-            MACOSX_BUNDLE_GUI_IDENTIFIER "Sleep Book"
+            MACOSX_BUNDLE_GUI_IDENTIFIER "com.sleepbook.app"
             MACOSX_BUNDLE_BUNDLE_VERSION "1.0"
             MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
     )
+endif()
+
+# --- Windows-specific: ensure console hidden for GUI apps ---
+if(WIN32)
+    # If you want a GUI app with no console window:
+    set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
