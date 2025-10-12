@@ -1,20 +1,20 @@
 # SleepBook 📊
 
 A comprehensive sleep and symptom tracking application built with Qt5 and C++20.
-
+![image description](sleepbook.png)
 ## Overview
 
-SleepBook is a desktop application designed to help users track their sleep patterns and associated symptoms over time. The application provides secure user management, data visualization through histograms, and encrypted data storage to protect user privacy.
+SleepBook is a desktop application designed to help users track their sleep patterns and associated symptoms over time. The application provides "secure" user management, data visualization through histograms, time series plots and correlation plots to compare things. There is basic encryption functionality to prevent users on shared machines from seeing each others data.
 
 ## Features
 
 ### 🔐 User Management
-- Secure login system with encrypted user authentication
+- "Secure" login system with encrypted user authentication
 - Multi-user support with individual data isolation
-- Data encryption to protect sensitive health information
+- Data encryption to protect sensitive health information, though this isn't the most advanced of encryption standards.
 
 ### 📈 Sleep & Symptom Tracking
-- Track various symptoms and their severity levels
+- Track various symptoms/causes and their severity levels
 - Record sleep-related data and patterns
 - Custom symptom widgets for easy data entry
 
@@ -22,6 +22,7 @@ SleepBook is a desktop application designed to help users track their sleep patt
 - Interactive histograms powered by QCustomPlot
 - Visual representation of sleep patterns and symptom trends
 - OpenGL-accelerated rendering for smooth performance
+  ![image description](sleepbook2.png)
 
 ### 💾 Data Management
 - Encrypted local data storage
@@ -67,6 +68,7 @@ The application supports flexible symptom tracking with:
 ## Requirements
 
 - Qt5 development libraries (Core, Widgets, OpenGL)
+- QCustomPlot
 - CMake 3.16 or higher
 - C++20 compatible compiler (GCC, Clang, or MSVC)
 - OpenGL support for enhanced graphics performance
@@ -83,7 +85,10 @@ The application supports flexible symptom tracking with:
 - **Clang** compiler (comes with Xcode)
 - **Qt5** installed via:
     - Homebrew: `brew install qt@5`
+    - macports: `port install qt5`
     - Qt installer from Qt website
+- **QCustomPlot**
+  - Header only library, download from source.
 
 # Create build directory
 ```mkdir build && cd build```
