@@ -128,6 +128,9 @@ private:
 
     void plotCorrelationData(const QList<QVariantMap> &entries, const QStringList &selectedSymptoms);
 
+    bool updateSummaryEntry(const QDate &date, double duration, const QList<QPair<QString, double>> &symptomData);
+
+
     // UI Components
     QTabWidget *tabWidget;
 
@@ -149,6 +152,7 @@ private:
     QTableWidget *historyTable;
     QPushButton *deleteEntryButton;
     QPushButton *refreshHistoryButton;
+
 
     // Statistics tab
     QWidget *statisticsTab;
