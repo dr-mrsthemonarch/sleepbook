@@ -1,6 +1,12 @@
 # SleepBook 📊
 
-A comprehensive sleep and symptom tracking application built with Qt5 and C++20.
+This is a probably not so great logbook type of app, mainly designed for tracking health issues and sleep quality. I was inspired by how terrible doctors are generally in believing their patients ailements, and surprised, or maybe not so surprised how effective it was to show long term symptom tracking data to said doctors who would suddenly see trends.
+
+Of course things like bad sleep and alcohol are not surprisingly new, with this program you can compare in a very simple way various relationships between your sleep quality and anything else.
+
+You could also go into the code and modify the headers, titles etc to use it for anything else really.
+
+
 ![image description](sleepbook.png)
 ## Overview
 
