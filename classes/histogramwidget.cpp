@@ -7,8 +7,7 @@ HistogramWidget::HistogramWidget(QWidget* parent)
     : QWidget(parent), m_maxValue(0) {
 }
 
-void HistogramWidget::setData(const QVector<double>& values, const QVector<QString>& labels, 
-                             const QColor& color, double maxValue) {
+void HistogramWidget::setData(const QVector<double>& values, const QVector<QString>& labels, const QColor& color, double maxValue) {
     m_values = values;
     m_labels = labels;
     m_color = color;
@@ -28,7 +27,7 @@ void HistogramWidget::paintEvent(QPaintEvent* event) {
     // Calculate dimensions
     int width = this->width();
     int height = this->height();
-    int margin = 40;
+    int margin = 10;
     int chartWidth = width - 2 * margin;
     int chartHeight = height - 2 * margin;
 
@@ -44,10 +43,6 @@ void HistogramWidget::paintEvent(QPaintEvent* event) {
 
     // Draw grid lines
     painter.setPen(QPen(QColor(220, 220, 220), 1));
-    // for (int i = 0; i <= 5; ++i) {
-    //     int y = margin + (chartHeight * i) / 5;
-    //     painter.drawLine(margin, y, width - margin, y);
-    // }
     for (int i = 0; i <= barCount; ++i) {
         double x = margin + i * barSpacing;
         painter.drawLine(QPointF(x, margin), QPointF(x, margin + chartHeight));

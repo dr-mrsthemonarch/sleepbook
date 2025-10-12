@@ -1,8 +1,42 @@
+
 cmake_minimum_required(VERSION 3.16)
 project(sleepbook)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Build type configuration
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
+# Release optimizations
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    # Compiler-specific optimizations
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        target_compile_options(${PROJECT_NAME} PRIVATE
+                -O3                    # Maximum optimization
+                -DNDEBUG              # Disable debug assertions
+                -march=native         # Optimize for current CPU architecture
+                -flto                 # Link-time optimization
+                -ffast-math           # Fast math optimizations
+                -funroll-loops        # Unroll loops for better performance
+        )
+        target_link_options(${PROJECT_NAME} PRIVATE
+                -flto                 # Link-time optimization
+                -s                    # Strip symbols
+        )
+    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+        target_compile_options(${PROJECT_NAME} PRIVATE
+                /O2                   # Maximum optimization
+                /DNDEBUG             # Disable debug assertions
+                /GL                  # Whole program optimization
+        )
+        target_link_options(${PROJECT_NAME} PRIVATE
+                /LTCG                # Link-time code generation
+        )
+    endif()
+endif()
 
 # Find Qt5
 find_package(Qt5 REQUIRED COMPONENTS Core Widgets OpenGL)
@@ -23,6 +57,8 @@ set(SOURCES
         classes/user.cpp
         classes/dataencryption.cpp
         classes/qcustomplot.cpp
+        classes/histogramwidget.cpp
+        classes/datapathmanager.cpp
 )
 
 set(HEADERS
@@ -34,9 +70,7 @@ set(HEADERS
         classes/user.h
         classes/dataencryption.h
         classes/qcustomplot.h
-        classes/histogramwidget.cpp
         classes/histogramwidget.h
-        classes/datapathmanager.cpp
         classes/datapathmanager.h
 )
 
@@ -54,7 +88,7 @@ target_link_libraries(${PROJECT_NAME}
         Qt5::OpenGL
 )
 
-#For macOS app bundles
+# For macOS app bundles
 if(APPLE)
     set_target_properties(sleepbook PROPERTIES
             AUTOMOC ON

@@ -1168,7 +1168,7 @@ void MainWindow::plotTimeSeriesData(const QList<QVariantMap> &entries, const QSt
     // Add some padding to y-axis as well (10% on top)
     QCPRange yRange = customPlot->yAxis->range();
     double yPadding = yRange.size() * 0.5;
-    customPlot->yAxis->setRange(yRange.lower - yPadding * 0.5, yRange.upper + yPadding);
+    customPlot->yAxis->setRange(yRange.lower - yPadding * 0.1, yRange.upper + yPadding);
 
     // Set custom tick labels
     QSharedPointer<QCPAxisTickerText> textTicker(new QCPAxisTickerText);
@@ -1378,15 +1378,13 @@ void MainWindow::plotHistogramStacked(const QList<QVariantMap> &entries, const Q
 
     QVector<double> dateNumbers;
     for (const QDate &date: dates)
-        // dateNumbers.append(date.startOfDay().toMSecsSinceEpoch() / 1000.0);
-        // Each QDate converted to a time representing the *middle* of the day
-        dateNumbers.append((date.startOfDay().addSecs(12 * 3600)).toMSecsSinceEpoch() / 1000.0);
+        dateNumbers.append(QDateTime(date).toMSecsSinceEpoch() / 1000.0);
 
-
+    double totalSeconds = dateNumbers.last() - dateNumbers.first();
     double minDate = dateNumbers.first();
     double maxDate = dateNumbers.last();
-    double xBuffer = (maxDate - minDate) * 2; // Reduced buffer for better scrolling
-    double barWidth = (maxDate - minDate) / (dates.size());
+    double xBuffer = (maxDate - minDate) * 0.1;
+    double barWidth = totalSeconds / (dates.size() * selectedSymptoms.size() * 1.5);
 
     QVector<QVector<double> > symptomValues(selectedSymptoms.size());
     QVector<double> maxY(selectedSymptoms.size(), 0.0);
@@ -1445,7 +1443,7 @@ void MainWindow::plotHistogramStacked(const QList<QVariantMap> &entries, const Q
         }
 
         yAxis->setLabel(selectedSymptoms[i] == "Sleep Duration" ? "Hours" : "Count");
-        yAxis->setRange(0, maxY[i] * 1.1);
+        yAxis->setRange(0, maxY[i] * 1.25);
 
         // Set initial X range with some padding
         xAxis->setRange(minDate - xBuffer, maxDate + xBuffer);
@@ -1481,18 +1479,10 @@ void MainWindow::syncXAxes(const QCPRange &newRange) {
     if (!senderAxis || !customPlot || !customPlot->plotLayout())
         return;
 
-    // Use the range provided by the signal, not by calling senderAxis->range()
-    // This removes the need for the static QCPRange lastRange check.
-
-    // CRITICAL: Block signals on the *sender* to prevent immediate re-entry
-    // from the replot when other axes update.
     bool oldSenderBlock = senderAxis->blockSignals(true);
 
-    // Block signals on the entire widget temporarily to prevent all related signals
-    // from firing until all ranges are set.
     bool oldPlotBlock = customPlot->blockSignals(true);
 
-    // 1. Iterate over the synchronized axes
     for (QPointer<QCPAxis> targetAxis: qAsConst(synchronizedXAxes)) {
         // 2. CRITICAL CHECK: Ensure the axis is still alive and is not the sender
         if (targetAxis && targetAxis.data() != senderAxis) {
@@ -1505,11 +1495,9 @@ void MainWindow::syncXAxes(const QCPRange &newRange) {
         }
     }
 
-    // Unblock signals in reverse order
     customPlot->blockSignals(oldPlotBlock);
     senderAxis->blockSignals(oldSenderBlock);
 
-    // Replot once at the end
     customPlot->replot(QCustomPlot::rpQueuedReplot);
 }
 
@@ -1899,7 +1887,6 @@ void MainWindow::onExportHistoryToCSV() {
     }
 }
 
-
 void MainWindow::exportHistoryToCSV(const QString& filename, const QList<QVariantMap>& entries) {
     QFile file(filename);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
@@ -1991,7 +1978,6 @@ void MainWindow::exportHistoryToCSV(const QString& filename, const QList<QVarian
 QList<QVariantMap> MainWindow::loadSummaryData() {
     return loadAllEntries();
 }
-
 
 QStringList MainWindow::parseCSVLine(const QString& line) {
     QStringList values;

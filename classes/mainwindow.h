@@ -97,9 +97,9 @@ private:
 
     bool saveSummaryEntry();
 
-    QString getCurrentDataDirectory();
+    static QString getCurrentDataDirectory();
 
-    QString getSymptomDataFile();
+    static QString getSymptomDataFile();
 
     void showAddSymptomDialog();
 
