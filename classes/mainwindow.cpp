@@ -322,7 +322,11 @@ void MainWindow::setupHistoryTab() {
     refreshHistoryButton = new QPushButton("Refresh");
     deleteEntryButton = new QPushButton("Delete Selected");
     deleteEntryButton->setStyleSheet("background-color: #f44336; color: white; padding: 6px;");
+    QPushButton* exportButton = new QPushButton(tr("Export to CSV"), this);
+    connect(exportButton, &QPushButton::clicked, this, &MainWindow::onExportHistoryToCSV);
 
+    buttonLayout->addStretch();
+    buttonLayout->addWidget(exportButton);
     buttonLayout->addWidget(refreshHistoryButton);
     buttonLayout->addWidget(deleteEntryButton);
     buttonLayout->addStretch();
@@ -1157,14 +1161,13 @@ void MainWindow::plotTimeSeriesData(const QList<QVariantMap> &entries, const QSt
     customPlot->xAxis->setLabel("Date");
     customPlot->yAxis->setLabel("Value");
 
-    // Add buffer space on both ends (5% of range on each side)
-    double xBuffer = entries.size() * 0.05;
+    double xBuffer = entries.size() * 0.1;
     customPlot->xAxis->setRange(-xBuffer, entries.size() - 1 + xBuffer);
     customPlot->rescaleAxes();
 
     // Add some padding to y-axis as well (10% on top)
     QCPRange yRange = customPlot->yAxis->range();
-    double yPadding = yRange.size() * 0.1;
+    double yPadding = yRange.size() * 0.5;
     customPlot->yAxis->setRange(yRange.lower - yPadding * 0.5, yRange.upper + yPadding);
 
     // Set custom tick labels
@@ -1246,7 +1249,6 @@ void MainWindow::plotHistogramOverlay(const QList<QVariantMap> &entries, const Q
     QVector<double> dateNumbers;
     for (const QDate &date: dates)
         dateNumbers.append(QDateTime(date).toMSecsSinceEpoch() / 1000.0);
-    // dateNumbers.append((date.startOfDay().addSecs(12 * 3600)).toMSecsSinceEpoch() / 1000.0);
 
     double totalSeconds = dateNumbers.last() - dateNumbers.first();
     double barWidth = totalSeconds / (dates.size() * selectedSymptoms.size() * 1.5);
@@ -1280,9 +1282,9 @@ void MainWindow::plotHistogramOverlay(const QList<QVariantMap> &entries, const Q
                                     ? "Value (Count/Hours)"
                                     : "Symptom Count");
 
-    double xBuffer = (dateNumbers.last() - dateNumbers.first()) * 0.5;
+    double xBuffer = (dateNumbers.last() - dateNumbers.first()) * 0.1;
     customPlot->xAxis->setRange(dateNumbers.first() - xBuffer, dateNumbers.last() + xBuffer);
-    customPlot->yAxis->setRange(0, maxValue * 1.2);
+    customPlot->yAxis->setRange(0, maxValue * 1.5);
 
     QSharedPointer<QCPAxisTickerDateTime> dateTicker(new QCPAxisTickerDateTime);
     dateTicker->setDateTimeFormat("MMM d\nyyyy");
@@ -1883,4 +1885,142 @@ void MainWindow::onSaveEntry() {
             loadHistoryData();
         }
     }
+}
+
+void MainWindow::onExportHistoryToCSV() {
+    QString fileName = QFileDialog::getSaveFileName(this,
+        tr("Export History to CSV"),
+        QString("sleepbook_history_%1.csv").arg(QDate::currentDate().toString("yyyy-MM-dd")),
+        tr("CSV Files (*.csv)"));
+
+    if (!fileName.isEmpty()) {
+        QList<QVariantMap> entries = loadSummaryData(); // This now uses loadAllEntries()
+        exportHistoryToCSV(fileName, entries);
+    }
+}
+
+
+void MainWindow::exportHistoryToCSV(const QString& filename, const QList<QVariantMap>& entries) {
+    QFile file(filename);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, tr("Export Error"),
+                           tr("Could not open file for writing: %1").arg(filename));
+        return;
+    }
+
+    QTextStream out(&file);
+    out.setCodec("UTF-8");
+
+    // Load data from summary file instead of individual entries
+    QList<QVariantMap> summaryData = loadSummaryData();
+
+    if (summaryData.isEmpty()) {
+        QMessageBox::warning(this, tr("Export Warning"), tr("No summary data found to export"));
+        file.close();
+        return;
+    }
+
+    // Get all unique field names from summary data
+    QSet<QString> allFieldNames;
+    for (const auto& entry : summaryData) {
+        for (auto it = entry.begin(); it != entry.end(); ++it) {
+            allFieldNames.insert(it.key());
+        }
+    }
+
+    QStringList fieldNames = allFieldNames.toList();
+    fieldNames.sort();
+
+    // Ensure date comes first if present
+    if (fieldNames.contains("date")) {
+        fieldNames.removeAll("date");
+        fieldNames.prepend("date");
+    }
+
+    // Write CSV header
+    QStringList headers;
+    for (const QString& field : fieldNames) {
+        QString header = field;
+        header = header.replace("_", " ");
+        header[0] = header[0].toUpper();
+        headers << header;
+    }
+
+    out << headers.join(",") << "\n";
+
+    // Write data rows
+    for (const auto& entry : summaryData) {
+        QStringList row;
+
+        for (const QString& field : fieldNames) {
+            QString value;
+
+            if (entry.contains(field)) {
+                QVariant fieldValue = entry.value(field);
+                if (fieldValue.type() == QVariant::Date) {
+                    value = fieldValue.toDate().toString("yyyy-MM-dd");
+                } else if (fieldValue.type() == QVariant::DateTime) {
+                    value = fieldValue.toDateTime().toString("yyyy-MM-dd hh:mm:ss");
+                } else if (fieldValue.type() == QVariant::Time) {
+                    value = fieldValue.toTime().toString("hh:mm:ss");
+                } else {
+                    value = fieldValue.toString();
+                }
+            }
+
+            // Escape commas and quotes in CSV values
+            if (value.contains(",") || value.contains("\"")) {
+                value = "\"" + value.replace("\"", "\"\"") + "\"";
+            }
+
+            row << (value.isEmpty() ? "0" : value);
+        }
+
+        out << row.join(",") << "\n";
+    }
+
+    file.close();
+
+    QMessageBox::information(this, tr("Export Complete"),
+                           tr("History exported successfully to:\n%1\n\n%2 entries exported with %3 fields")
+                           .arg(filename)
+                           .arg(summaryData.size())
+                           .arg(fieldNames.size()));
+}
+
+QList<QVariantMap> MainWindow::loadSummaryData() {
+    return loadAllEntries();
+}
+
+
+QStringList MainWindow::parseCSVLine(const QString& line) {
+    QStringList values;
+    QString currentValue;
+    bool inQuotes = false;
+
+    for (int i = 0; i < line.length(); ++i) {
+        QChar ch = line[i];
+
+        if (ch == '"') {
+            if (inQuotes && i + 1 < line.length() && line[i + 1] == '"') {
+                // Escaped quote
+                currentValue += '"';
+                ++i; // Skip next quote
+            } else {
+                // Toggle quote mode
+                inQuotes = !inQuotes;
+            }
+        } else if (ch == ',' && !inQuotes) {
+            // End of field
+            values.append(currentValue.trimmed());
+            currentValue.clear();
+        } else {
+            currentValue += ch;
+        }
+    }
+
+    // Add the last value
+    values.append(currentValue.trimmed());
+
+    return values;
 }

@@ -56,6 +56,8 @@ private slots:
 
     void onHistoryDateSelected(int row, int column);
 
+    void onExportHistoryToCSV();
+
     void onDeleteHistoryEntry();
 
     void onPlotTypeChanged(int index);
@@ -74,6 +76,8 @@ private:
     void onHistogramSelectAllSymptoms();
 
     void onHistogramDeselectAllSymptoms();
+
+    void exportHistoryToCSV(const QString& filename, const QList<QVariantMap>& entries);
 
     void setupEntryTab();
 
@@ -186,6 +190,9 @@ private:
     QList<Symptom> symptoms;
     QList<SymptomWidget *> symptomWidgets;
     QVector<QPointer<QCPAxis> > synchronizedXAxes;
+
+    QList<QVariantMap> loadSummaryData();
+    QStringList parseCSVLine(const QString& line);
 };
 
 #endif // MAINWINDOW_H
