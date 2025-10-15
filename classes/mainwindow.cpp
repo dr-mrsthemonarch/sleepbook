@@ -70,23 +70,22 @@ void MainWindow::loadHistogramData() {
         return;
     }
 
-    // Always update symptom list to ensure it's current
-    histogramSymptomListWidget->clear();
+    // Only update symptom list if empty - DON'T clear it every time
+    if (histogramSymptomListWidget->count() == 0) {
+        QListWidgetItem *sleepItem = new QListWidgetItem("Sleep Duration");
+        sleepItem->setFlags(sleepItem->flags() | Qt::ItemIsUserCheckable);
+        sleepItem->setCheckState(Qt::Checked);
+        histogramSymptomListWidget->addItem(sleepItem);
 
-    QListWidgetItem *sleepItem = new QListWidgetItem("Sleep Duration");
-    sleepItem->setFlags(sleepItem->flags() | Qt::ItemIsUserCheckable);
-    sleepItem->setCheckState(Qt::Checked);
-    histogramSymptomListWidget->addItem(sleepItem);
-
-    for (const Symptom &s: symptoms) {
-        QListWidgetItem *item = new QListWidgetItem(s.getName());
-        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-        item->setCheckState(Qt::Unchecked);
-        histogramSymptomListWidget->addItem(item);
+        for (const Symptom &s: symptoms) {
+            QListWidgetItem *item = new QListWidgetItem(s.getName());
+            item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+            item->setCheckState(Qt::Unchecked);
+            histogramSymptomListWidget->addItem(item);
+        }
     }
 
-    // Rest of your existing loadHistogramData code...
-    // Get selected symptoms
+    // Get selected symptoms (this will now preserve user selections)
     QStringList selectedSymptoms;
     for (int i = 0; i < histogramSymptomListWidget->count(); ++i) {
         QListWidgetItem *item = histogramSymptomListWidget->item(i);
@@ -335,7 +334,7 @@ void MainWindow::setupHistoryTab() {
     refreshHistoryButton = new QPushButton("Refresh");
     deleteEntryButton = new QPushButton("Delete Selected");
     deleteEntryButton->setStyleSheet("background-color: #f44336; color: white; padding: 6px;");
-    QPushButton* exportButton = new QPushButton(tr("Export to CSV"), this);
+    QPushButton *exportButton = new QPushButton(tr("Export to CSV"), this);
     connect(exportButton, &QPushButton::clicked, this, &MainWindow::onExportHistoryToCSV);
 
     buttonLayout->addStretch();
@@ -513,7 +512,8 @@ void MainWindow::setupWordCloudTab() {
 
     // Generate button
     generateWordCloudButton = new QPushButton("Generate Word Cloud");
-    generateWordCloudButton->setStyleSheet("background-color: #2196F3; color: white; padding: 10px; font-weight: bold;");
+    generateWordCloudButton->
+            setStyleSheet("background-color: #2196F3; color: white; padding: 10px; font-weight: bold;");
     controlLayout->addWidget(generateWordCloudButton);
 
     // Word count info
@@ -841,7 +841,7 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
 
         // Create a map from current symptom data for quick lookup
         QMap<QString, double> currentSymptomValues;
-        for (const auto &pair : symptomData) {
+        for (const auto &pair: symptomData) {
             currentSymptomValues[pair.first] = pair.second;
         }
 
@@ -851,10 +851,10 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
         QVBoxLayout *symptomsLayout = new QVBoxLayout(symptomsWidget);
 
         // Create symptom widgets for ALL available symptoms
-        QList<QWidget*> symptomEditWidgets;
-        QList<QCheckBox*> symptomCheckboxes;
+        QList<QWidget *> symptomEditWidgets;
+        QList<QCheckBox *> symptomCheckboxes;
 
-        for (const Symptom &symptom : symptoms) {
+        for (const Symptom &symptom: symptoms) {
             QHBoxLayout *symptomLayout = new QHBoxLayout();
 
             // Checkbox to enable/disable the symptom
@@ -943,7 +943,7 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
             double newHours = bedDateTime.secsTo(wakeDateTime) / 3600.0;
 
             // Collect symptom data from ALL symptoms (only enabled ones)
-            QList<QPair<QString, double>> newSymptomData;
+            QList<QPair<QString, double> > newSymptomData;
             for (int i = 0; i < symptoms.size() && i < symptomEditWidgets.size(); ++i) {
                 QCheckBox *checkBox = symptomCheckboxes[i];
                 if (!checkBox->isChecked()) {
@@ -951,18 +951,18 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
                 }
 
                 const Symptom &symptom = symptoms[i];
-                QHBoxLayout *layout = qobject_cast<QHBoxLayout*>(symptomEditWidgets[i]->layout());
+                QHBoxLayout *layout = qobject_cast<QHBoxLayout *>(symptomEditWidgets[i]->layout());
                 if (layout && layout->count() >= 3) {
                     QWidget *valueWidget = layout->itemAt(2)->widget();
                     double value = 0.0;
 
                     if (symptom.getType() == SymptomType::Binary) {
-                        QComboBox *comboBox = qobject_cast<QComboBox*>(valueWidget);
+                        QComboBox *comboBox = qobject_cast<QComboBox *>(valueWidget);
                         if (comboBox) {
                             value = comboBox->currentIndex(); // 0 for "No", 1 for "Yes"
                         }
                     } else {
-                        QDoubleSpinBox *spinBox = qobject_cast<QDoubleSpinBox*>(valueWidget);
+                        QDoubleSpinBox *spinBox = qobject_cast<QDoubleSpinBox *>(valueWidget);
                         if (spinBox) {
                             value = spinBox->value();
                         }
@@ -992,11 +992,13 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
                 // Refresh the history table and any open plots
                 loadHistoryData();
                 // If statistics tab is open, refresh it too
-                if (tabWidget->currentIndex() == 2) { // Statistics tab index
+                if (tabWidget->currentIndex() == 2) {
+                    // Statistics tab index
                     loadStatisticsData();
                 }
                 // If histogram tab is open, refresh it too
-                if (tabWidget->currentIndex() == 3) { // Histogram tab index
+                if (tabWidget->currentIndex() == 3) {
+                    // Histogram tab index
                     loadHistogramData();
                 }
             } else {
@@ -1067,22 +1069,22 @@ void MainWindow::loadStatisticsData() {
         return;
     }
 
-    // Always update symptom list to ensure it's current
-    symptomListWidget->clear();
+    // Only update symptom list if empty - DON'T clear it every time
+    if (symptomListWidget->count() == 0) {
+        QListWidgetItem *sleepItem = new QListWidgetItem("Sleep Duration");
+        sleepItem->setFlags(sleepItem->flags() | Qt::ItemIsUserCheckable);
+        sleepItem->setCheckState(Qt::Checked);
+        symptomListWidget->addItem(sleepItem);
 
-    QListWidgetItem *sleepItem = new QListWidgetItem("Sleep Duration");
-    sleepItem->setFlags(sleepItem->flags() | Qt::ItemIsUserCheckable);
-    sleepItem->setCheckState(Qt::Checked);
-    symptomListWidget->addItem(sleepItem);
-
-    for (const Symptom &s: symptoms) {
-        QListWidgetItem *item = new QListWidgetItem(s.getName());
-        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-        item->setCheckState(Qt::Unchecked);
-        symptomListWidget->addItem(item);
+        for (const Symptom &s: symptoms) {
+            QListWidgetItem *item = new QListWidgetItem(s.getName());
+            item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+            item->setCheckState(Qt::Unchecked);
+            symptomListWidget->addItem(item);
+        }
     }
 
-    // Get selected symptoms
+    // Get selected symptoms (this will now preserve user selections)
     QStringList selectedSymptoms;
     for (int i = 0; i < symptomListWidget->count(); ++i) {
         QListWidgetItem *item = symptomListWidget->item(i);
@@ -1092,11 +1094,7 @@ void MainWindow::loadStatisticsData() {
     }
 
     if (selectedSymptoms.isEmpty()) {
-        // If nothing is selected but we have data, just show the message
-        // Don't return early so the plot gets cleared
-        customPlot->clearGraphs();
-        customPlot->clearPlottables();
-        customPlot->replot();
+        QMessageBox::warning(this, "No Selection", "Please select at least one symptom or metric to plot.");
         return;
     }
 
@@ -2000,9 +1998,10 @@ void MainWindow::onSaveEntry() {
 
 void MainWindow::onExportHistoryToCSV() {
     QString fileName = QFileDialog::getSaveFileName(this,
-        tr("Export History to CSV"),
-        QString("sleepbook_history_%1.csv").arg(QDate::currentDate().toString("yyyy-MM-dd")),
-        tr("CSV Files (*.csv)"));
+                                                    tr("Export History to CSV"),
+                                                    QString("sleepbook_history_%1.csv").arg(
+                                                        QDate::currentDate().toString("yyyy-MM-dd")),
+                                                    tr("CSV Files (*.csv)"));
 
     if (!fileName.isEmpty()) {
         QList<QVariantMap> entries = loadSummaryData(); // This now uses loadAllEntries()
@@ -2010,11 +2009,11 @@ void MainWindow::onExportHistoryToCSV() {
     }
 }
 
-void MainWindow::exportHistoryToCSV(const QString& filename, const QList<QVariantMap>& entries) {
+void MainWindow::exportHistoryToCSV(const QString &filename, const QList<QVariantMap> &entries) {
     QFile file(filename);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         QMessageBox::warning(this, tr("Export Error"),
-                           tr("Could not open file for writing: %1").arg(filename));
+                             tr("Could not open file for writing: %1").arg(filename));
         return;
     }
 
@@ -2032,7 +2031,7 @@ void MainWindow::exportHistoryToCSV(const QString& filename, const QList<QVarian
 
     // Get all unique field names from summary data
     QSet<QString> allFieldNames;
-    for (const auto& entry : summaryData) {
+    for (const auto &entry: summaryData) {
         for (auto it = entry.begin(); it != entry.end(); ++it) {
             allFieldNames.insert(it.key());
         }
@@ -2049,7 +2048,7 @@ void MainWindow::exportHistoryToCSV(const QString& filename, const QList<QVarian
 
     // Write CSV header
     QStringList headers;
-    for (const QString& field : fieldNames) {
+    for (const QString &field: fieldNames) {
         QString header = field;
         header = header.replace("_", " ");
         header[0] = header[0].toUpper();
@@ -2059,10 +2058,10 @@ void MainWindow::exportHistoryToCSV(const QString& filename, const QList<QVarian
     out << headers.join(",") << "\n";
 
     // Write data rows
-    for (const auto& entry : summaryData) {
+    for (const auto &entry: summaryData) {
         QStringList row;
 
-        for (const QString& field : fieldNames) {
+        for (const QString &field: fieldNames) {
             QString value;
 
             if (entry.contains(field)) {
@@ -2092,17 +2091,17 @@ void MainWindow::exportHistoryToCSV(const QString& filename, const QList<QVarian
     file.close();
 
     QMessageBox::information(this, tr("Export Complete"),
-                           tr("History exported successfully to:\n%1\n\n%2 entries exported with %3 fields")
-                           .arg(filename)
-                           .arg(summaryData.size())
-                           .arg(fieldNames.size()));
+                             tr("History exported successfully to:\n%1\n\n%2 entries exported with %3 fields")
+                             .arg(filename)
+                             .arg(summaryData.size())
+                             .arg(fieldNames.size()));
 }
 
 QList<QVariantMap> MainWindow::loadSummaryData() {
     return loadAllEntries();
 }
 
-QStringList MainWindow::parseCSVLine(const QString& line) {
+QStringList MainWindow::parseCSVLine(const QString &line) {
     QStringList values;
     QString currentValue;
     bool inQuotes = false;
@@ -2168,7 +2167,7 @@ void MainWindow::loadWordCloudData() {
     QString dataDir = getCurrentDataDirectory();
     QString password = UserManager::instance().getCurrentUser()->getEncryptionPassword();
 
-    for (const QVariantMap &entry : entries) {
+    for (const QVariantMap &entry: entries) {
         QDate entryDate = entry["date"].toDate();
         QString filename = QString("%1/sleep_%2.dat")
                 .arg(dataDir)
@@ -2184,7 +2183,7 @@ void MainWindow::loadWordCloudData() {
             QTime bedtime, waketime;
             double hours;
             QString notes;
-            QList<QPair<QString, double>> symptomData;
+            QList<QPair<QString, double> > symptomData;
 
             in >> timestamp >> date >> bedtime >> waketime >> hours >> notes >> symptomData;
 
@@ -2221,7 +2220,7 @@ void MainWindow::loadWordCloudData() {
         "than", "too", "very", "just", "now"
     };
 
-    for (const QString &word : words) {
+    for (const QString &word: words) {
         // Filter out very short words and stop words
         if (word.length() >= 3 && !stopWords.contains(word)) {
             wordFrequencies[word]++;
@@ -2237,7 +2236,7 @@ void MainWindow::loadWordCloudData() {
     int totalUniqueWords = wordFrequencies.size();
     int totalWords = words.size();
     wordCountLabel->setText(QString("Total unique words: %1 (from %2 total words in %3 entries)")
-                           .arg(totalUniqueWords)
-                           .arg(totalWords)
-                           .arg(entriesWithNotes));
+        .arg(totalUniqueWords)
+        .arg(totalWords)
+        .arg(entriesWithNotes));
 }
