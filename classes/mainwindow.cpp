@@ -5,6 +5,7 @@
 #include "logindialog.h"
 #include "histogramwidget.h"
 #include "datapathmanager.h"
+#include "wordcloudwidget.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent) {
@@ -44,11 +45,15 @@ void MainWindow::setupUI() {
     setupHistoryTab();
     setupStatisticsTab();
     setupHistogramTab();
+    setupWordCloudTab();  // Add this line
+
 
     tabWidget->addTab(entryTab, "New Entry");
     tabWidget->addTab(historyTab, "History");
     tabWidget->addTab(statisticsTab, "Plots");
     tabWidget->addTab(histogramTab, "Histograms");
+    tabWidget->addTab(wordCloudTab, "Word Cloud");  // Add this line
+
 
     connect(tabWidget, &QTabWidget::currentChanged, this, &MainWindow::onTabChanged);
 }
@@ -440,6 +445,109 @@ void MainWindow::setupStatisticsTab() {
     connect(allDateRangeCheckbox, &QCheckBox::toggled, [this](bool checked) {
         startDateEdit->setEnabled(!checked);
         endDateEdit->setEnabled(!checked);
+    });
+}
+
+void MainWindow::setupWordCloudTab() {
+    wordCloudTab = new QWidget();
+    QHBoxLayout *mainLayout = new QHBoxLayout(wordCloudTab);
+
+    // Left panel - controls
+    QVBoxLayout *controlLayout = new QVBoxLayout();
+    controlLayout->setSpacing(10);
+
+    QLabel *titleLabel = new QLabel("Word Cloud Configuration");
+    titleLabel->setStyleSheet("font-size: 14px; font-weight: bold;");
+    controlLayout->addWidget(titleLabel);
+
+    // Date range
+    controlLayout->addWidget(new QLabel("Date Range:"));
+    wordCloudAllDateRangeCheckbox = new QCheckBox("Use all data");
+    wordCloudAllDateRangeCheckbox->setChecked(true);
+    controlLayout->addWidget(wordCloudAllDateRangeCheckbox);
+
+    QHBoxLayout *startDateLayout = new QHBoxLayout();
+    startDateLayout->addWidget(new QLabel("From:"));
+    wordCloudStartDateEdit = new QDateEdit();
+    wordCloudStartDateEdit->setDate(QDate::currentDate().addMonths(-1));
+    wordCloudStartDateEdit->setCalendarPopup(true);
+    wordCloudStartDateEdit->setEnabled(false);
+    startDateLayout->addWidget(wordCloudStartDateEdit);
+    controlLayout->addLayout(startDateLayout);
+
+    QHBoxLayout *endDateLayout = new QHBoxLayout();
+    endDateLayout->addWidget(new QLabel("To:"));
+    wordCloudEndDateEdit = new QDateEdit();
+    wordCloudEndDateEdit->setDate(QDate::currentDate());
+    wordCloudEndDateEdit->setCalendarPopup(true);
+    wordCloudEndDateEdit->setEnabled(false);
+    endDateLayout->addWidget(wordCloudEndDateEdit);
+    controlLayout->addLayout(endDateLayout);
+
+    // Word frequency settings
+    controlLayout->addWidget(new QLabel("Word Settings:"));
+
+    QHBoxLayout *minFreqLayout = new QHBoxLayout();
+    minFreqLayout->addWidget(new QLabel("Min frequency:"));
+    minWordFrequencySpinBox = new QSpinBox();
+    minWordFrequencySpinBox->setRange(1, 10);
+    minWordFrequencySpinBox->setValue(1);
+    minFreqLayout->addWidget(minWordFrequencySpinBox);
+    controlLayout->addLayout(minFreqLayout);
+
+    QHBoxLayout *maxWordsLayout = new QHBoxLayout();
+    maxWordsLayout->addWidget(new QLabel("Max words:"));
+    maxWordsSpinBox = new QSpinBox();
+    maxWordsSpinBox->setRange(10, 200);
+    maxWordsSpinBox->setValue(50);
+    maxWordsLayout->addWidget(maxWordsSpinBox);
+    controlLayout->addLayout(maxWordsLayout);
+
+    // Generate button
+    generateWordCloudButton = new QPushButton("Generate Word Cloud");
+    generateWordCloudButton->setStyleSheet("background-color: #2196F3; color: white; padding: 10px; font-weight: bold;");
+    controlLayout->addWidget(generateWordCloudButton);
+
+    // Word count info
+    wordCountLabel = new QLabel("Total words: 0");
+    wordCountLabel->setStyleSheet("color: #666; padding: 5px;");
+    controlLayout->addWidget(wordCountLabel);
+
+    controlLayout->addStretch();
+
+    // Right panel - word cloud
+    QVBoxLayout *cloudLayout = new QVBoxLayout();
+
+    QLabel *cloudTitle = new QLabel("Sleep Notes Word Cloud");
+    cloudTitle->setStyleSheet("font-size: 16px; font-weight: bold; padding: 10px;");
+    cloudLayout->addWidget(cloudTitle);
+
+    wordCloudWidget = new WordCloudWidget();
+    wordCloudWidget->setMinimumHeight(400);
+    cloudLayout->addWidget(wordCloudWidget);
+
+    QLabel *infoLabel = new QLabel(
+        "Tip: The word cloud shows the most frequently used words in your sleep notes. "
+        "Larger words appear more often. Hover over words to see their frequency count.");
+    infoLabel->setStyleSheet("color: #666; padding: 10px;");
+    infoLabel->setWordWrap(true);
+    cloudLayout->addWidget(infoLabel);
+
+    // Add layouts to main
+    mainLayout->addLayout(controlLayout, 1);
+    mainLayout->addLayout(cloudLayout, 3);
+
+    // Connect signals
+    connect(generateWordCloudButton, &QPushButton::clicked, this, &MainWindow::loadWordCloudData);
+    connect(wordCloudAllDateRangeCheckbox, &QCheckBox::toggled, [this](bool checked) {
+        wordCloudStartDateEdit->setEnabled(!checked);
+        wordCloudEndDateEdit->setEnabled(!checked);
+    });
+    connect(minWordFrequencySpinBox, QOverload<int>::of(&QSpinBox::valueChanged), [this](int value) {
+        wordCloudWidget->setMinimumFrequency(value);
+    });
+    connect(maxWordsSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), [this](int value) {
+        wordCloudWidget->setMaxWords(value);
     });
 }
 
@@ -2009,4 +2117,112 @@ QStringList MainWindow::parseCSVLine(const QString& line) {
     values.append(currentValue.trimmed());
 
     return values;
+}
+
+void MainWindow::loadWordCloudData() {
+    if (!UserManager::instance().isLoggedIn()) {
+        return;
+    }
+
+    // Load all entries
+    QList<QVariantMap> entries = loadAllEntries();
+
+    if (entries.isEmpty()) {
+        wordCloudWidget->setWords(QMap<QString, int>());
+        wordCountLabel->setText("Total words: 0");
+        QMessageBox::information(this, "No Data", "No sleep data available for word cloud analysis.");
+        return;
+    }
+
+    // Filter by date range if needed
+    if (!wordCloudAllDateRangeCheckbox->isChecked()) {
+        entries = filterEntriesByDateRange(entries, wordCloudStartDateEdit->date(), wordCloudEndDateEdit->date());
+        if (entries.isEmpty()) {
+            wordCloudWidget->setWords(QMap<QString, int>());
+            wordCountLabel->setText("Total words: 0");
+            QMessageBox::information(this, "No Data", "No data in selected date range.");
+            return;
+        }
+    }
+
+    // Extract text from all notes
+    QString allNotesText;
+    int entriesWithNotes = 0;
+
+    QString dataDir = getCurrentDataDirectory();
+    QString password = UserManager::instance().getCurrentUser()->getEncryptionPassword();
+
+    for (const QVariantMap &entry : entries) {
+        QDate entryDate = entry["date"].toDate();
+        QString filename = QString("%1/sleep_%2.dat")
+                .arg(dataDir)
+                .arg(entryDate.toString("yyyy-MM-dd"));
+
+        QByteArray data = DataEncryption::loadEncrypted(filename, password);
+        if (!data.isEmpty()) {
+            QDataStream in(&data, QIODevice::ReadOnly);
+            in.setVersion(QDataStream::Qt_5_15);
+
+            QDateTime timestamp;
+            QDate date;
+            QTime bedtime, waketime;
+            double hours;
+            QString notes;
+            QList<QPair<QString, double>> symptomData;
+
+            in >> timestamp >> date >> bedtime >> waketime >> hours >> notes >> symptomData;
+
+            if (!notes.trimmed().isEmpty()) {
+                allNotesText += notes + " ";
+                entriesWithNotes++;
+            }
+        }
+    }
+
+    if (allNotesText.trimmed().isEmpty()) {
+        wordCloudWidget->setWords(QMap<QString, int>());
+        wordCountLabel->setText("Total words: 0");
+        QMessageBox::information(this, "No Text Data",
+            QString("No text found in sleep notes from %1 entries.").arg(entries.size()));
+        return;
+    }
+
+    // Process text and count word frequencies
+    QMap<QString, int> wordFrequencies;
+
+    // Simple word extraction and cleaning
+    QStringList words = allNotesText.toLower().split(QRegExp("\\W+"), QString::SkipEmptyParts);
+
+    // Common stop words to filter out
+    QStringList stopWords = {
+        "the", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by",
+        "a", "an", "as", "are", "was", "were", "is", "be", "been", "have", "has", "had",
+        "will", "would", "could", "should", "may", "might", "can", "do", "did", "does",
+        "i", "you", "he", "she", "it", "we", "they", "me", "him", "her", "us", "them",
+        "my", "your", "his", "her", "its", "our", "their", "this", "that", "these", "those",
+        "not", "no", "yes", "up", "down", "out", "off", "over", "under", "again", "further",
+        "then", "once", "here", "there", "when", "where", "why", "how", "all", "any", "both",
+        "each", "few", "more", "most", "other", "some", "such", "only", "own", "same", "so",
+        "than", "too", "very", "just", "now"
+    };
+
+    for (const QString &word : words) {
+        // Filter out very short words and stop words
+        if (word.length() >= 3 && !stopWords.contains(word)) {
+            wordFrequencies[word]++;
+        }
+    }
+
+    // Update word cloud
+    wordCloudWidget->setMinimumFrequency(minWordFrequencySpinBox->value());
+    wordCloudWidget->setMaxWords(maxWordsSpinBox->value());
+    wordCloudWidget->setWords(wordFrequencies);
+
+    // Update statistics
+    int totalUniqueWords = wordFrequencies.size();
+    int totalWords = words.size();
+    wordCountLabel->setText(QString("Total unique words: %1 (from %2 total words in %3 entries)")
+                           .arg(totalUniqueWords)
+                           .arg(totalWords)
+                           .arg(entriesWithNotes));
 }

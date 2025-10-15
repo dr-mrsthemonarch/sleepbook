@@ -35,6 +35,7 @@ set(SOURCES
         classes/qcustomplot.cpp
         classes/histogramwidget.cpp
         classes/datapathmanager.cpp
+        classes/wordcloudwidget.cpp
 )
 
 set(HEADERS
@@ -48,6 +49,7 @@ set(HEADERS
         classes/qcustomplot.h
         classes/histogramwidget.h
         classes/datapathmanager.h
+        classes/wordcloudwidget.h
 )
 
 # Create executable

@@ -27,11 +27,23 @@
 #include <QDateEdit>
 #include <QCheckBox>
 #include <QPointer>
+#include <QSpinBox>
+#include <QSlider>
+#include <QFont>
+#include <QFontMetrics>
+#include <QPainter>
+#include <QPaintEvent>
+#include <QWidget>
+#include <QTimer>
+#include <QRandomGenerator>
 #include "symptom.h"
 #include "symptomwidget.h"
 #include "usermanager.h"
 #include "dataencryption.h"
 #include "qcustomplot.h"
+#include "wordcloudwidget.h"
+
+class WordCloudWidget;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -68,6 +80,11 @@ private slots:
 
     void syncXAxes(const QCPRange &newRange);
 
+    // // Word cloud slots
+    // void onWordCloudGenerate();
+    // void onWordClicked(const QString& word, int frequency);
+    // void onWordCloudConfigChanged();
+
 private:
     void setupUI();
 
@@ -86,6 +103,8 @@ private:
     void setupHistogramTab();
 
     void setupStatisticsTab();
+
+    void setupWordCloudTab();
 
     void loadSymptoms();
 
@@ -111,6 +130,8 @@ private:
 
     void loadStatisticsData();
 
+    void loadWordCloudData();
+
     QList<QVariantMap> loadAllEntries();
 
     QList<QVariantMap> filterEntriesByDateRange(const QList<QVariantMap> &entries, const QDate &start,
@@ -133,6 +154,11 @@ private:
     void plotCorrelationData(const QList<QVariantMap> &entries, const QStringList &selectedSymptoms);
 
     bool updateSummaryEntry(const QDate &date, double duration, const QList<QPair<QString, double>> &symptomData);
+
+    // Word cloud helper functions
+    QMap<QString, int> extractWordFrequencies(const QList<QVariantMap>& entries);
+    QStringList tokenizeText(const QString& text);
+    QStringList getStopWords();
 
 
     // UI Components
@@ -181,6 +207,23 @@ private:
     QPushButton *histogramDeselectAllButton;
     QPushButton *generateHistogramButton;
     QCustomPlot *histogramCustomPlot;
+
+    // Word Cloud tab
+    QWidget *wordCloudTab;
+    WordCloudWidget *wordCloudWidget;
+    QCheckBox *wordCloudAllDateRangeCheckbox;
+    QDateEdit *wordCloudStartDateEdit;
+    QDateEdit *wordCloudEndDateEdit;
+    QSpinBox *wordCloudMaxWordsSpinBox;
+    QSpinBox *wordCloudMinFontSpinBox;
+    QSpinBox *wordCloudMaxFontSpinBox;
+    QPushButton *wordCloudGenerateButton;
+    QPushButton *wordCloudRegenerateButton;
+    QPushButton *generateWordCloudButton;
+    QLabel *wordCloudStatsLabel;
+    QSpinBox *minWordFrequencySpinBox;
+    QSpinBox *maxWordsSpinBox;
+    QLabel *wordCountLabel;
 
     // User toolbar
     QToolBar *userToolbar;
