@@ -1,4 +1,4 @@
-
+//created by drmrsthemonarch with ai effort
 #include "wordcloudwidget.h"
 #include <QPaintEvent>
 #include <QFontMetrics>

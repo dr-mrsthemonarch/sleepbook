@@ -1,4 +1,4 @@
-
+//created by drmrsthemonarch with ai effort
 #ifndef WORDCLOUDWIDGET_H
 #define WORDCLOUDWIDGET_H
 

@@ -1,3 +1,4 @@
+//created by drmrsthemonarch with ai effort
 #include "mainwindow.h"
 #include <QToolBar>
 #include <QDataStream>

@@ -1,3 +1,4 @@
+//created by drmrsthemonarch with ai effort
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 

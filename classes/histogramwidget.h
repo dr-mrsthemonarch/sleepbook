@@ -1,3 +1,4 @@
+//created by drmrsthemonarch with ai effort
 #ifndef HISTOGRAMWIDGET_H
 #define HISTOGRAMWIDGET_H
 
