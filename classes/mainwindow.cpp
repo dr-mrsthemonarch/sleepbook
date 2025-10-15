@@ -12,13 +12,15 @@ MainWindow::MainWindow(QWidget *parent)
     setupUI();
     createUserToolbar();
 
-    // Load symptoms only after UI is set up and user is logged in
     if (UserManager::instance().isLoggedIn()) {
         loadSymptoms();
         rebuildSymptomWidgets();
     }
 
     updateWindowTitle();
+
+    // Connect immediately, not with singleShot
+    connect(tabWidget, &QTabWidget::currentChanged, this, &MainWindow::onTabChanged);
 }
 
 MainWindow::~MainWindow() {
@@ -29,7 +31,7 @@ MainWindow::~MainWindow() {
 
 void MainWindow::setupUI() {
     setWindowTitle("Sleepbook");
-    resize(1200, 800); // Slightly wider to accommodate more tabs
+    resize(1200, 800);
 
     QWidget *centralWidget = new QWidget(this);
     setCentralWidget(centralWidget);
@@ -45,17 +47,21 @@ void MainWindow::setupUI() {
     setupHistoryTab();
     setupStatisticsTab();
     setupHistogramTab();
-    setupWordCloudTab();  // Add this line
-
+    setupWordCloudTab();
 
     tabWidget->addTab(entryTab, "New Entry");
     tabWidget->addTab(historyTab, "History");
     tabWidget->addTab(statisticsTab, "Plots");
     tabWidget->addTab(histogramTab, "Histograms");
-    tabWidget->addTab(wordCloudTab, "Word Cloud");  // Add this line
+    tabWidget->addTab(wordCloudTab, "Word Cloud");
 
-
+    // Connect signal
     connect(tabWidget, &QTabWidget::currentChanged, this, &MainWindow::onTabChanged);
+
+    // Pre-load data for the initially visible tab
+    QTimer::singleShot(0, this, [this]() {
+        onTabChanged(tabWidget->currentIndex());
+    });
 }
 
 void MainWindow::loadHistogramData() {
@@ -63,21 +69,22 @@ void MainWindow::loadHistogramData() {
         return;
     }
 
-    // Update symptom list if empty
-    if (histogramSymptomListWidget->count() == 0) {
-        QListWidgetItem *sleepItem = new QListWidgetItem("Sleep Duration");
-        sleepItem->setFlags(sleepItem->flags() | Qt::ItemIsUserCheckable);
-        sleepItem->setCheckState(Qt::Checked);
-        histogramSymptomListWidget->addItem(sleepItem);
+    // Always update symptom list to ensure it's current
+    histogramSymptomListWidget->clear();
 
-        for (const Symptom &s: symptoms) {
-            QListWidgetItem *item = new QListWidgetItem(s.getName());
-            item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-            item->setCheckState(Qt::Unchecked);
-            histogramSymptomListWidget->addItem(item);
-        }
+    QListWidgetItem *sleepItem = new QListWidgetItem("Sleep Duration");
+    sleepItem->setFlags(sleepItem->flags() | Qt::ItemIsUserCheckable);
+    sleepItem->setCheckState(Qt::Checked);
+    histogramSymptomListWidget->addItem(sleepItem);
+
+    for (const Symptom &s: symptoms) {
+        QListWidgetItem *item = new QListWidgetItem(s.getName());
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(Qt::Unchecked);
+        histogramSymptomListWidget->addItem(item);
     }
 
+    // Rest of your existing loadHistogramData code...
     // Get selected symptoms
     QStringList selectedSymptoms;
     for (int i = 0; i < histogramSymptomListWidget->count(); ++i) {
@@ -642,6 +649,9 @@ void MainWindow::onTabChanged(int index) {
     } else if (index == 3) {
         // Histograms tab
         loadHistogramData();
+    } else if (index == 4) {
+        // Word Cloud tab
+        loadWordCloudData();
     }
 }
 
@@ -1056,19 +1066,19 @@ void MainWindow::loadStatisticsData() {
         return;
     }
 
-    // Update symptom list if empty
-    if (symptomListWidget->count() == 0) {
-        QListWidgetItem *sleepItem = new QListWidgetItem("Sleep Duration");
-        sleepItem->setFlags(sleepItem->flags() | Qt::ItemIsUserCheckable);
-        sleepItem->setCheckState(Qt::Checked);
-        symptomListWidget->addItem(sleepItem);
+    // Always update symptom list to ensure it's current
+    symptomListWidget->clear();
 
-        for (const Symptom &s: symptoms) {
-            QListWidgetItem *item = new QListWidgetItem(s.getName());
-            item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-            item->setCheckState(Qt::Unchecked);
-            symptomListWidget->addItem(item);
-        }
+    QListWidgetItem *sleepItem = new QListWidgetItem("Sleep Duration");
+    sleepItem->setFlags(sleepItem->flags() | Qt::ItemIsUserCheckable);
+    sleepItem->setCheckState(Qt::Checked);
+    symptomListWidget->addItem(sleepItem);
+
+    for (const Symptom &s: symptoms) {
+        QListWidgetItem *item = new QListWidgetItem(s.getName());
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(Qt::Unchecked);
+        symptomListWidget->addItem(item);
     }
 
     // Get selected symptoms
@@ -1081,7 +1091,11 @@ void MainWindow::loadStatisticsData() {
     }
 
     if (selectedSymptoms.isEmpty()) {
-        QMessageBox::warning(this, "No Selection", "Please select at least one symptom or metric to plot.");
+        // If nothing is selected but we have data, just show the message
+        // Don't return early so the plot gets cleared
+        customPlot->clearGraphs();
+        customPlot->clearPlottables();
+        customPlot->replot();
         return;
     }
 
@@ -2120,6 +2134,7 @@ QStringList MainWindow::parseCSVLine(const QString& line) {
 }
 
 void MainWindow::loadWordCloudData() {
+    // qDebug() << "loadWordCloudData() started";
     if (!UserManager::instance().isLoggedIn()) {
         return;
     }
@@ -2128,7 +2143,7 @@ void MainWindow::loadWordCloudData() {
     QList<QVariantMap> entries = loadAllEntries();
 
     if (entries.isEmpty()) {
-        wordCloudWidget->setWords(QMap<QString, int>());
+        wordCloudWidget->setWordFrequencies(QMap<QString, int>());
         wordCountLabel->setText("Total words: 0");
         QMessageBox::information(this, "No Data", "No sleep data available for word cloud analysis.");
         return;
@@ -2138,7 +2153,7 @@ void MainWindow::loadWordCloudData() {
     if (!wordCloudAllDateRangeCheckbox->isChecked()) {
         entries = filterEntriesByDateRange(entries, wordCloudStartDateEdit->date(), wordCloudEndDateEdit->date());
         if (entries.isEmpty()) {
-            wordCloudWidget->setWords(QMap<QString, int>());
+            wordCloudWidget->setWordFrequencies(QMap<QString, int>());
             wordCountLabel->setText("Total words: 0");
             QMessageBox::information(this, "No Data", "No data in selected date range.");
             return;
@@ -2180,10 +2195,9 @@ void MainWindow::loadWordCloudData() {
     }
 
     if (allNotesText.trimmed().isEmpty()) {
-        wordCloudWidget->setWords(QMap<QString, int>());
+        wordCloudWidget->setWordFrequencies(QMap<QString, int>());
         wordCountLabel->setText("Total words: 0");
-        QMessageBox::information(this, "No Text Data",
-            QString("No text found in sleep notes from %1 entries.").arg(entries.size()));
+        // QMessageBox::information(this, "No Text Data",QString("No text found in sleep notes from %1 entries.").arg(entries.size()));
         return;
     }
 
@@ -2216,7 +2230,7 @@ void MainWindow::loadWordCloudData() {
     // Update word cloud
     wordCloudWidget->setMinimumFrequency(minWordFrequencySpinBox->value());
     wordCloudWidget->setMaxWords(maxWordsSpinBox->value());
-    wordCloudWidget->setWords(wordFrequencies);
+    wordCloudWidget->setWordFrequencies(wordFrequencies);
 
     // Update statistics
     int totalUniqueWords = wordFrequencies.size();

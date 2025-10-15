@@ -97,7 +97,13 @@ void WordCloudWidget::regenerateLayout() {
 }
 
 void WordCloudWidget::calculateLayout() {
-    if (m_words.isEmpty() || size().isEmpty()) {
+    if (m_words.isEmpty()) {
+        return;
+    }
+
+    // If widget hasn't been shown yet, defer layout
+    if (size().isEmpty() || width() <= 0 || height() <= 0) {
+        m_needsLayout = true;
         return;
     }
 
@@ -328,5 +334,13 @@ void WordCloudWidget::setWords(const QMap<QString, int>& wordFreqs) {
 
     calculateLayout();
     update();
+}
+
+void WordCloudWidget::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+
+    if (m_needsLayout && !m_words.isEmpty()) {
+        m_layoutTimer->start();
+    }
 }
 

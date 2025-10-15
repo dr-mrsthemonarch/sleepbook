@@ -80,11 +80,6 @@ private slots:
 
     void syncXAxes(const QCPRange &newRange);
 
-    // // Word cloud slots
-    // void onWordCloudGenerate();
-    // void onWordClicked(const QString& word, int frequency);
-    // void onWordCloudConfigChanged();
-
 private:
     void setupUI();
 
