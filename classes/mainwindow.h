@@ -128,7 +128,7 @@ private:
 
     void loadWordCloudData();
 
-    QList<QVariantMap> loadAllEntries();
+    static QList<QVariantMap> loadAllEntries();
 
     QList<QVariantMap> filterEntriesByDateRange(const QList<QVariantMap> &entries, const QDate &start,
                                                 const QDate &end);

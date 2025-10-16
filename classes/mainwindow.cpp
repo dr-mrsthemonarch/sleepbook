@@ -70,7 +70,6 @@ void MainWindow::loadHistogramData() {
         return;
     }
 
-    // Only update symptom list if empty - DON'T clear it every time
     if (histogramSymptomListWidget->count() == 0) {
         QListWidgetItem *sleepItem = new QListWidgetItem("Sleep Duration");
         sleepItem->setFlags(sleepItem->flags() | Qt::ItemIsUserCheckable);
@@ -85,7 +84,6 @@ void MainWindow::loadHistogramData() {
         }
     }
 
-    // Get selected symptoms (this will now preserve user selections)
     QStringList selectedSymptoms;
     for (int i = 0; i < histogramSymptomListWidget->count(); ++i) {
         QListWidgetItem *item = histogramSymptomListWidget->item(i);
@@ -697,12 +695,12 @@ void MainWindow::loadHistoryData() {
         const QVariantMap &entry = entries[i];
 
         // Date
-        QTableWidgetItem *dateItem = new QTableWidgetItem(entry["date"].toDate().toString("yyyy-MM-dd"));
+        auto *dateItem = new QTableWidgetItem(entry["date"].toDate().toString("yyyy-MM-dd"));
         historyTable->setItem(i, 0, dateItem);
 
         // Sleep duration
         double duration = entry["sleep_duration"].toDouble();
-        QTableWidgetItem *durationItem = new QTableWidgetItem(QString::number(duration, 'f', 1) + " hrs");
+        auto *durationItem = new QTableWidgetItem(QString::number(duration, 'f', 1) + " hrs");
         historyTable->setItem(i, 1, durationItem);
 
         // For bedtime and wake time, we need to load from the daily file
@@ -747,7 +745,7 @@ void MainWindow::loadHistoryData() {
             }
         }
 
-        QTableWidgetItem *symptomsItem = new QTableWidgetItem(symptomList.join(", "));
+        auto *symptomsItem = new QTableWidgetItem(symptomList.join(", "));
         historyTable->setItem(i, 4, symptomsItem);
     }
 
