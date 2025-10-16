@@ -35,13 +35,9 @@ public:
     explicit WordCloudWidget(QWidget *parent = nullptr);
 
     void setWords(const QMap<QString, int>& wordFreqs);
-
-
-
     void setWordFrequencies(const QMap<QString, int>& frequencies);
     void clearWords();
     void regenerateLayout();
-
 
     // Configuration
     void setMinFontSize(int size) { m_minFontSize = size; update(); }
@@ -49,6 +45,7 @@ public:
     void setMaxWords(int maxWords) { m_maxWords = maxWords; }
     void setColorScheme(const QList<QColor>& colors) { m_colorScheme = colors; update(); }
     void setMinimumFrequency(int minFreq);
+    static QStringList getStopWords();
 
     int getMinFontSize() const { return m_minFontSize; }
     int getMaxFontSize() const { return m_maxFontSize; }
@@ -64,7 +61,6 @@ protected:
     void mouseMoveEvent(QMouseEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     void showEvent(QShowEvent *event);
-    QStringList getStopWords() const;
 
 
 private:
@@ -76,6 +72,7 @@ private:
     QRect getInflatedRect(const QRect& rect, int inflation) const;
     void placeWordsSpiral();
     QPointF getSpiralPoint(int step, const QPointF& center) const;
+
 
     QMap<QString, int> m_wordFrequencies;
     QList<WordInfo> m_words;

@@ -2134,7 +2134,6 @@ QStringList MainWindow::parseCSVLine(const QString &line) {
 }
 
 void MainWindow::loadWordCloudData() {
-    // qDebug() << "loadWordCloudData() started";
     if (!UserManager::instance().isLoggedIn()) {
         return;
     }
@@ -2207,18 +2206,7 @@ void MainWindow::loadWordCloudData() {
     // Simple word extraction and cleaning
     QStringList words = allNotesText.toLower().split(QRegExp("\\W+"), QString::SkipEmptyParts);
 
-    // Common stop words to filter out
-    QStringList stopWords = {
-        "the", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by",
-        "a", "an", "as", "are", "was", "were", "is", "be", "been", "have", "has", "had",
-        "will", "would", "could", "should", "may", "might", "can", "do", "did", "does",
-        "i", "you", "he", "she", "it", "we", "they", "me", "him", "her", "us", "them",
-        "my", "your", "his", "her", "its", "our", "their", "this", "that", "these", "those",
-        "not", "no", "yes", "up", "down", "out", "off", "over", "under", "again", "further",
-        "then", "once", "here", "there", "when", "where", "why", "how", "all", "any", "both",
-        "each", "few", "more", "most", "other", "some", "such", "only", "own", "same", "so",
-        "than", "too", "very", "just", "now"
-    };
+    QStringList stopWords = WordCloudWidget::getStopWords();
 
     for (const QString &word: words) {
         // Filter out very short words and stop words
