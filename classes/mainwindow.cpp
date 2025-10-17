@@ -19,7 +19,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     updateWindowTitle();
 
-    // Connect immediately, not with singleShot
+    // Connect immediately, not with a singleShot
     connect(tabWidget, &QTabWidget::currentChanged, this, &MainWindow::onTabChanged);
 }
 
@@ -33,10 +33,10 @@ void MainWindow::setupUI() {
     setWindowTitle("Sleepbook");
     resize(1200, 800);
 
-    QWidget *centralWidget = new QWidget(this);
+    auto *centralWidget = new QWidget(this);
     setCentralWidget(centralWidget);
 
-    QVBoxLayout *mainLayout = new QVBoxLayout(centralWidget);
+    auto *mainLayout = new QVBoxLayout(centralWidget);
 
     // Create tab widget
     tabWidget = new QTabWidget();
@@ -64,13 +64,13 @@ void MainWindow::setupUI() {
     });
 }
 
-void MainWindow::initializeHistogram() {
+void MainWindow::initializeHistogram() const {
     // Enable mouse tracking
     histogramCustomPlot->setMouseTracking(true);
 
     // Configure zooming behavior
     histogramCustomPlot->axisRect()->setRangeZoomFactor(0.85); // Slower zoom
-    histogramCustomPlot->axisRect()->setRangeDrag(0); // Start with no drag
+    histogramCustomPlot->axisRect()->setRangeDrag(nullptr); // Start with no drag
 
     // Add zoom instructions to tooltip
     histogramCustomPlot->setToolTip("Scroll: Vertical zoom\nDrag: Horizontal scroll\nRight-click: Context menu");
@@ -78,13 +78,13 @@ void MainWindow::initializeHistogram() {
 
 void MainWindow::setupHistogramTab() {
     histogramTab = new QWidget();
-    QHBoxLayout *mainLayout = new QHBoxLayout(histogramTab);
+    auto *mainLayout = new QHBoxLayout(histogramTab);
 
     // Left panel - controls
-    QVBoxLayout *controlLayout = new QVBoxLayout();
+    auto *controlLayout = new QVBoxLayout();
     controlLayout->setSpacing(10);
 
-    QLabel *titleLabel = new QLabel("Stacked Histogram Configuration");
+    auto *titleLabel = new QLabel("Stacked Histogram Configuration");
     titleLabel->setStyleSheet("font-size: 14px; font-weight: bold;");
     controlLayout->addWidget(titleLabel);
 
@@ -94,7 +94,7 @@ void MainWindow::setupHistogramTab() {
     histogramAllDateRangeCheckbox->setChecked(true);
     controlLayout->addWidget(histogramAllDateRangeCheckbox);
 
-    QHBoxLayout *startDateLayout = new QHBoxLayout();
+    auto *startDateLayout = new QHBoxLayout();
     startDateLayout->addWidget(new QLabel("From:"));
     histogramStartDateEdit = new QDateEdit();
     histogramStartDateEdit->setDate(QDate::currentDate().addMonths(-1));
@@ -103,7 +103,7 @@ void MainWindow::setupHistogramTab() {
     startDateLayout->addWidget(histogramStartDateEdit);
     controlLayout->addLayout(startDateLayout);
 
-    QHBoxLayout *endDateLayout = new QHBoxLayout();
+    auto *endDateLayout = new QHBoxLayout();
     endDateLayout->addWidget(new QLabel("To:"));
     histogramEndDateEdit = new QDateEdit();
     histogramEndDateEdit->setDate(QDate::currentDate());
@@ -115,7 +115,7 @@ void MainWindow::setupHistogramTab() {
     // Symptom selection
     controlLayout->addWidget(new QLabel("Select Symptoms/Metrics:"));
 
-    QHBoxLayout *selectButtonLayout = new QHBoxLayout();
+    auto selectButtonLayout = new QHBoxLayout();
     histogramSelectAllButton = new QPushButton("Select All");
     histogramDeselectAllButton = new QPushButton("Deselect All");
     selectButtonLayout->addWidget(histogramSelectAllButton);
@@ -135,9 +135,9 @@ void MainWindow::setupHistogramTab() {
     controlLayout->addStretch();
 
     // Right panel - plot (using QCustomPlot)
-    QVBoxLayout *plotLayout = new QVBoxLayout();
+    auto plotLayout = new QVBoxLayout();
 
-    QLabel *plotTitle = new QLabel("Stacked Histogram Visualization");
+    auto plotTitle = new QLabel("Stacked Histogram Visualization");
     plotTitle->setStyleSheet("font-size: 16px; font-weight: bold; padding: 10px;");
     plotLayout->addWidget(plotTitle);
 
@@ -146,7 +146,7 @@ void MainWindow::setupHistogramTab() {
     histogramCustomPlot->setMinimumHeight(600);
     plotLayout->addWidget(histogramCustomPlot);
 
-    QLabel *infoLabel = new QLabel(
+    auto infoLabel = new QLabel(
         "Tip: Stacked histograms show multiple symptoms in separate plots with synchronized X-axes. Use mouse wheel to zoom, drag to pan.");
     infoLabel->setStyleSheet("color: #666; padding: 10px;");
     infoLabel->setWordWrap(true);
@@ -168,16 +168,16 @@ void MainWindow::setupHistogramTab() {
 
 void MainWindow::setupEntryTab() {
     entryTab = new QWidget();
-    QHBoxLayout *entryLayout = new QHBoxLayout(entryTab);
+    auto entryLayout = new QHBoxLayout(entryTab);
 
     // Left Panel - Notes
-    QVBoxLayout *leftLayout = new QVBoxLayout();
-    QLabel *notesLabel = new QLabel("Sleep Notes:");
+    auto leftLayout = new QVBoxLayout();
+    auto notesLabel = new QLabel("Sleep Notes:");
     notesLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
     leftLayout->addWidget(notesLabel);
 
     // Date and time inputs
-    QHBoxLayout *dateLayout = new QHBoxLayout();
+    auto dateLayout = new QHBoxLayout();
     dateLayout->addWidget(new QLabel("Date:"));
     dateEdit = new QDateEdit();
     dateEdit->setDate(QDate::currentDate());
@@ -186,7 +186,7 @@ void MainWindow::setupEntryTab() {
     dateLayout->addStretch();
     leftLayout->addLayout(dateLayout);
 
-    QHBoxLayout *timeLayout = new QHBoxLayout();
+    auto timeLayout = new QHBoxLayout();
     timeLayout->addWidget(new QLabel("Bedtime:"));
     bedtimeEdit = new QTimeEdit();
     bedtimeEdit->setTime(QTime(01, 0));
@@ -204,7 +204,7 @@ void MainWindow::setupEntryTab() {
     leftLayout->addWidget(notesEdit);
 
     // Buttons
-    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    auto buttonLayout = new QHBoxLayout();
     saveButton = new QPushButton("Save Entry");
     saveButton->setStyleSheet("background-color: #4CAF50; color: white; padding: 8px; font-weight: bold;");
     clearButton = new QPushButton("Clear");
@@ -215,8 +215,8 @@ void MainWindow::setupEntryTab() {
     leftLayout->addLayout(buttonLayout);
 
     // Right Panel - Symptoms
-    QVBoxLayout *rightLayout = new QVBoxLayout();
-    QLabel *symptomsLabel = new QLabel("Symptoms/Factors:");
+    auto rightLayout = new QVBoxLayout();
+    auto symptomsLabel = new QLabel("Symptoms/Factors:");
     symptomsLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
     rightLayout->addWidget(symptomsLabel);
 
@@ -249,9 +249,9 @@ void MainWindow::setupEntryTab() {
 
 void MainWindow::setupHistoryTab() {
     historyTab = new QWidget();
-    QVBoxLayout *layout = new QVBoxLayout(historyTab);
+    auto layout = new QVBoxLayout(historyTab);
 
-    QLabel *titleLabel = new QLabel("Sleep History");
+    auto titleLabel = new QLabel("Sleep History");
     titleLabel->setStyleSheet("font-size: 16px; font-weight: bold; padding: 10px;");
     layout->addWidget(titleLabel);
 
@@ -266,11 +266,11 @@ void MainWindow::setupHistoryTab() {
     layout->addWidget(historyTable);
 
     // Buttons
-    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    auto buttonLayout = new QHBoxLayout();
     refreshHistoryButton = new QPushButton("Refresh");
     deleteEntryButton = new QPushButton("Delete Selected");
     deleteEntryButton->setStyleSheet("background-color: #f44336; color: white; padding: 6px;");
-    QPushButton *exportButton = new QPushButton(tr("Export to CSV"), this);
+    auto exportButton = new QPushButton(tr("Export to CSV"), this);
     connect(exportButton, &QPushButton::clicked, this, &MainWindow::onExportHistoryToCSV);
 
     buttonLayout->addStretch();
@@ -287,13 +287,13 @@ void MainWindow::setupHistoryTab() {
 
 void MainWindow::setupStatisticsTab() {
     statisticsTab = new QWidget();
-    QHBoxLayout *mainLayout = new QHBoxLayout(statisticsTab);
+    auto mainLayout = new QHBoxLayout(statisticsTab);
 
     // Left panel - controls
-    QVBoxLayout *controlLayout = new QVBoxLayout();
+    auto controlLayout = new QVBoxLayout();
     controlLayout->setSpacing(10);
 
-    QLabel *titleLabel = new QLabel("Plot Configuration");
+    auto titleLabel = new QLabel("Plot Configuration");
     titleLabel->setStyleSheet("font-size: 14px; font-weight: bold;");
     controlLayout->addWidget(titleLabel);
 
@@ -319,7 +319,7 @@ void MainWindow::setupStatisticsTab() {
     allDateRangeCheckbox->setChecked(true);
     controlLayout->addWidget(allDateRangeCheckbox);
 
-    QHBoxLayout *startDateLayout = new QHBoxLayout();
+    auto startDateLayout = new QHBoxLayout();
     startDateLayout->addWidget(new QLabel("From:"));
     startDateEdit = new QDateEdit();
     startDateEdit->setDate(QDate::currentDate().addMonths(-1));
@@ -328,7 +328,7 @@ void MainWindow::setupStatisticsTab() {
     startDateLayout->addWidget(startDateEdit);
     controlLayout->addLayout(startDateLayout);
 
-    QHBoxLayout *endDateLayout = new QHBoxLayout();
+    auto endDateLayout = new QHBoxLayout();
     endDateLayout->addWidget(new QLabel("To:"));
     endDateEdit = new QDateEdit();
     endDateEdit->setDate(QDate::currentDate());
@@ -340,7 +340,7 @@ void MainWindow::setupStatisticsTab() {
     // Symptom selection
     controlLayout->addWidget(new QLabel("Select Symptoms/Metrics:"));
 
-    QHBoxLayout *selectButtonLayout = new QHBoxLayout();
+    auto selectButtonLayout = new QHBoxLayout();
     selectAllButton = new QPushButton("Select All");
     deselectAllButton = new QPushButton("Deselect All");
     selectButtonLayout->addWidget(selectAllButton);
@@ -359,9 +359,9 @@ void MainWindow::setupStatisticsTab() {
     controlLayout->addStretch();
 
     // Right panel - plot
-    QVBoxLayout *plotLayout = new QVBoxLayout();
+    auto plotLayout = new QVBoxLayout();
 
-    QLabel *plotTitle = new QLabel("Sleep Statistics Visualization");
+    auto plotTitle = new QLabel("Sleep Statistics Visualization");
     plotTitle->setStyleSheet("font-size: 16px; font-weight: bold; padding: 10px;");
     plotLayout->addWidget(plotTitle);
 
@@ -370,7 +370,7 @@ void MainWindow::setupStatisticsTab() {
     customPlot->setMinimumHeight(500);
     plotLayout->addWidget(customPlot);
 
-    QLabel *infoLabel = new QLabel("Tip: Select multiple symptoms to compare. Use mouse wheel to zoom, drag to pan.");
+    auto infoLabel = new QLabel("Tip: Select multiple symptoms to compare. Use mouse wheel to zoom, drag to pan.");
     infoLabel->setStyleSheet("color: #666; padding: 10px;");
     infoLabel->setWordWrap(true);
     plotLayout->addWidget(infoLabel);
@@ -393,13 +393,13 @@ void MainWindow::setupStatisticsTab() {
 
 void MainWindow::setupWordCloudTab() {
     wordCloudTab = new QWidget();
-    QHBoxLayout *mainLayout = new QHBoxLayout(wordCloudTab);
+    auto mainLayout = new QHBoxLayout(wordCloudTab);
 
     // Left panel - controls
-    QVBoxLayout *controlLayout = new QVBoxLayout();
+    auto *controlLayout = new QVBoxLayout();
     controlLayout->setSpacing(10);
 
-    QLabel *titleLabel = new QLabel("Word Cloud Configuration");
+    auto *titleLabel = new QLabel("Word Cloud Configuration");
     titleLabel->setStyleSheet("font-size: 14px; font-weight: bold;");
     controlLayout->addWidget(titleLabel);
 
@@ -409,7 +409,7 @@ void MainWindow::setupWordCloudTab() {
     wordCloudAllDateRangeCheckbox->setChecked(true);
     controlLayout->addWidget(wordCloudAllDateRangeCheckbox);
 
-    QHBoxLayout *startDateLayout = new QHBoxLayout();
+    auto startDateLayout = new QHBoxLayout();
     startDateLayout->addWidget(new QLabel("From:"));
     wordCloudStartDateEdit = new QDateEdit();
     wordCloudStartDateEdit->setDate(QDate::currentDate().addMonths(-1));
@@ -418,7 +418,7 @@ void MainWindow::setupWordCloudTab() {
     startDateLayout->addWidget(wordCloudStartDateEdit);
     controlLayout->addLayout(startDateLayout);
 
-    QHBoxLayout *endDateLayout = new QHBoxLayout();
+    auto endDateLayout = new QHBoxLayout();
     endDateLayout->addWidget(new QLabel("To:"));
     wordCloudEndDateEdit = new QDateEdit();
     wordCloudEndDateEdit->setDate(QDate::currentDate());
@@ -430,7 +430,7 @@ void MainWindow::setupWordCloudTab() {
     // Word frequency settings
     controlLayout->addWidget(new QLabel("Word Settings:"));
 
-    QHBoxLayout *minFreqLayout = new QHBoxLayout();
+    auto minFreqLayout = new QHBoxLayout();
     minFreqLayout->addWidget(new QLabel("Min frequency:"));
     minWordFrequencySpinBox = new QSpinBox();
     minWordFrequencySpinBox->setRange(1, 10);
@@ -438,7 +438,7 @@ void MainWindow::setupWordCloudTab() {
     minFreqLayout->addWidget(minWordFrequencySpinBox);
     controlLayout->addLayout(minFreqLayout);
 
-    QHBoxLayout *maxWordsLayout = new QHBoxLayout();
+    auto maxWordsLayout = new QHBoxLayout();
     maxWordsLayout->addWidget(new QLabel("Max words:"));
     maxWordsSpinBox = new QSpinBox();
     maxWordsSpinBox->setRange(10, 200);
@@ -460,9 +460,9 @@ void MainWindow::setupWordCloudTab() {
     controlLayout->addStretch();
 
     // Right panel - word cloud
-    QVBoxLayout *cloudLayout = new QVBoxLayout();
+    auto cloudLayout = new QVBoxLayout();
 
-    QLabel *cloudTitle = new QLabel("Sleep Notes Word Cloud");
+    auto cloudTitle = new QLabel("Sleep Notes Word Cloud");
     cloudTitle->setStyleSheet("font-size: 16px; font-weight: bold; padding: 10px;");
     cloudLayout->addWidget(cloudTitle);
 
@@ -470,7 +470,7 @@ void MainWindow::setupWordCloudTab() {
     wordCloudWidget->setMinimumHeight(400);
     cloudLayout->addWidget(wordCloudWidget);
 
-    QLabel *infoLabel = new QLabel(
+    auto infoLabel = new QLabel(
         "Tip: The word cloud shows the most frequently used words in your sleep notes. "
         "Larger words appear more often. Hover over words to see their frequency count.");
     infoLabel->setStyleSheet("color: #666; padding: 10px;");
@@ -501,13 +501,13 @@ void MainWindow::loadHistogramData() {
     }
 
     if (histogramSymptomListWidget->count() == 0) {
-        QListWidgetItem *sleepItem = new QListWidgetItem("Sleep Duration");
+        auto sleepItem = new QListWidgetItem("Sleep Duration");
         sleepItem->setFlags(sleepItem->flags() | Qt::ItemIsUserCheckable);
         sleepItem->setCheckState(Qt::Checked);
         histogramSymptomListWidget->addItem(sleepItem);
 
         for (const Symptom &s: symptoms) {
-            QListWidgetItem *item = new QListWidgetItem(s.getName());
+            auto item = new QListWidgetItem(s.getName());
             item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
             item->setCheckState(Qt::Unchecked);
             histogramSymptomListWidget->addItem(item);
@@ -664,13 +664,13 @@ void MainWindow::loadStatisticsData() {
     }
 
     if (symptomListWidget->count() == 0) {
-        QListWidgetItem *sleepItem = new QListWidgetItem("Sleep Duration");
+        auto sleepItem = new QListWidgetItem("Sleep Duration");
         sleepItem->setFlags(sleepItem->flags() | Qt::ItemIsUserCheckable);
         sleepItem->setCheckState(Qt::Checked);
         symptomListWidget->addItem(sleepItem);
 
         for (const Symptom &s: symptoms) {
-            QListWidgetItem *item = new QListWidgetItem(s.getName());
+            auto item = new QListWidgetItem(s.getName());
             item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
             item->setCheckState(Qt::Unchecked);
             symptomListWidget->addItem(item);
@@ -716,9 +716,8 @@ void MainWindow::loadStatisticsData() {
     });
 
     // Plot based on selected type
-    int plotType = plotTypeSelector->currentIndex();
 
-    switch (plotType) {
+    switch (int plotType = plotTypeSelector->currentIndex()) {
         case 0: // Time Series
             plotTimeSeriesData(entries, selectedSymptoms);
             break;
@@ -1145,7 +1144,7 @@ void MainWindow::plotCorrelationData(const QList<QVariantMap> &entries, const QS
 }
 
 void MainWindow::showHistogramContextMenu(const QPoint &pos) {
-    QMenu *menu = new QMenu(this);
+    auto menu = new QMenu(this);
     menu->setAttribute(Qt::WA_DeleteOnClose);
 
     QAction *resetZoomAction = menu->addAction("Reset Zoom");
@@ -1159,16 +1158,16 @@ void MainWindow::showAddSymptomDialog() {
     dialog.setWindowTitle("Add New Symptom");
     dialog.setModal(true);
 
-    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+    auto layout = new QVBoxLayout(&dialog);
 
     // Name
     layout->addWidget(new QLabel("Symptom Name:"));
-    QLineEdit *nameEdit = new QLineEdit();
+    auto nameEdit = new QLineEdit();
     layout->addWidget(nameEdit);
 
     // Type
     layout->addWidget(new QLabel("Type:"));
-    QComboBox *typeCombo = new QComboBox();
+    auto typeCombo = new QComboBox();
     typeCombo->addItem("Yes/No (Binary)", QVariant::fromValue(SymptomType::Binary));
     typeCombo->addItem("Count (e.g., times woke up)", QVariant::fromValue(SymptomType::Count));
     typeCombo->addItem("Quantity (e.g., drinks, mg)", QVariant::fromValue(SymptomType::Quantity));
@@ -1176,14 +1175,14 @@ void MainWindow::showAddSymptomDialog() {
 
     // Unit
     layout->addWidget(new QLabel("Unit (optional, for Count/Quantity):"));
-    QLineEdit *unitEdit = new QLineEdit();
+    auto unitEdit = new QLineEdit();
     unitEdit->setPlaceholderText("e.g., times, drinks, mg, hours");
     layout->addWidget(unitEdit);
 
     // Buttons
-    QHBoxLayout *buttonLayout = new QHBoxLayout();
-    QPushButton *okButton = new QPushButton("Add");
-    QPushButton *cancelButton = new QPushButton("Cancel");
+    auto buttonLayout = new QHBoxLayout();
+    auto okButton = new QPushButton("Add");
+    auto cancelButton = new QPushButton("Cancel");
     buttonLayout->addWidget(okButton);
     buttonLayout->addWidget(cancelButton);
     layout->addLayout(buttonLayout);
@@ -1301,7 +1300,7 @@ void MainWindow::plotHistogramStacked(const QList<QVariantMap> &entries, const Q
     };
 
     for (int i = 0; i < numPlots; ++i) {
-        QCPAxisRect *axisRect = new QCPAxisRect(histogramCustomPlot);
+        auto axisRect = new QCPAxisRect(histogramCustomPlot);
         histogramCustomPlot->plotLayout()->addElement(i, 0, axisRect);
 
         // Configure axis rect for zooming and scrolling
@@ -1313,7 +1312,7 @@ void MainWindow::plotHistogramStacked(const QList<QVariantMap> &entries, const Q
         QCPAxis *yAxis = axisRect->axis(QCPAxis::atLeft);
         synchronizedXAxes.append(xAxis);
 
-        QCPBars *bars = new QCPBars(xAxis, yAxis);
+        auto bars = new QCPBars(xAxis, yAxis);
         bars->setData(dateNumbers, symptomValues[i]);
         QColor color = colors[i % colors.size()];
         bars->setPen(QPen(color));
@@ -1338,7 +1337,7 @@ void MainWindow::plotHistogramStacked(const QList<QVariantMap> &entries, const Q
         // Set initial X range with some padding
         xAxis->setRange(minDate - xBuffer, maxDate + xBuffer);
 
-        QCPTextElement *title = new QCPTextElement(histogramCustomPlot, selectedSymptoms[i]);
+        auto title = new QCPTextElement(histogramCustomPlot, selectedSymptoms[i]);
         axisRect->insetLayout()->addElement(title, Qt::AlignTop | Qt::AlignHCenter);
 
         // Add margin to prevent title overlap
@@ -1348,8 +1347,7 @@ void MainWindow::plotHistogramStacked(const QList<QVariantMap> &entries, const Q
 
     // Connect synchronization for all x-axes
     for (int i = 0; i < synchronizedXAxes.size(); ++i) {
-        QPointer<QCPAxis> xAxis = synchronizedXAxes[i];
-        if (xAxis) {
+        if (QPointer<QCPAxis> xAxis = synchronizedXAxes[i]) {
             connect(xAxis, QOverload<const QCPRange &>::of(&QCPAxis::rangeChanged),
                     this, &MainWindow::syncXAxes, Qt::UniqueConnection);
         }
@@ -1371,7 +1369,7 @@ void MainWindow::rebuildSymptomWidgets() {
 
     // Create new widgets
     for (const Symptom &s: symptoms) {
-        SymptomWidget *widget = new SymptomWidget(s);
+        auto widget = new SymptomWidget(s);
         symptomWidgets.append(widget);
         symptomsLayout->addWidget(widget);
     }
@@ -1392,9 +1390,7 @@ void MainWindow::onHistogramDeselectAllSymptoms() {
 }
 
 void MainWindow::onUserChanged() {
-    bool loggedIn = UserManager::instance().isLoggedIn();
-
-    if (loggedIn) {
+    if (bool loggedIn = UserManager::instance().isLoggedIn()) {
         User *user = UserManager::instance().getCurrentUser();
         QString displayText = user->getDisplayName().isEmpty() ? user->getUsername() : user->getDisplayName();
         userLabel->setText(QString("User: %1").arg(displayText));
@@ -1431,7 +1427,7 @@ void MainWindow::onLogout() {
             onClearForm();
             updateWindowTitle();
         } else {
-            // User cancelled login, close the application
+            // User canceled login, close the application
             close();
         }
     }
@@ -1487,25 +1483,25 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
         QDialog dialog(this);
         dialog.setWindowTitle(QString("Edit Sleep Entry - %1").arg(date.toString("yyyy-MM-dd")));
         dialog.resize(600, 700);
-        QVBoxLayout *layout = new QVBoxLayout(&dialog);
+        auto layout = new QVBoxLayout(&dialog);
 
         // Date (non-editable)
         layout->addWidget(new QLabel(QString("<b>Date:</b> %1").arg(date.toString("yyyy-MM-dd"))));
 
         // Bedtime (editable)
         layout->addWidget(new QLabel("<b>Bedtime:</b>"));
-        QTimeEdit *bedtimeEdit = new QTimeEdit(bedtime);
+        auto bedtimeEdit = new QTimeEdit(bedtime);
         bedtimeEdit->setDisplayFormat("HH:mm");
         layout->addWidget(bedtimeEdit);
 
         // Wake time (editable)
         layout->addWidget(new QLabel("<b>Wake time:</b>"));
-        QTimeEdit *waketimeEdit = new QTimeEdit(waketime);
+        auto waketimeEdit = new QTimeEdit(waketime);
         waketimeEdit->setDisplayFormat("HH:mm");
         layout->addWidget(waketimeEdit);
 
         // Sleep duration (auto-calculated)
-        QLabel *durationLabel = new QLabel(QString("<b>Sleep duration:</b> %1 hours").arg(hours, 0, 'f', 1));
+        auto durationLabel = new QLabel(QString("<b>Sleep duration:</b> %1 hours").arg(hours, 0, 'f', 1));
         layout->addWidget(durationLabel);
 
         // Auto-update duration when times change
@@ -1529,7 +1525,7 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
 
         // Notes (editable) - FIXED: Remove setReadOnly
         layout->addWidget(new QLabel("<b>Notes:</b>"));
-        QTextEdit *notesEdit = new QTextEdit();
+        auto notesEdit = new QTextEdit();
         notesEdit->setPlainText(notes);
         notesEdit->setMaximumHeight(120);
         // Remove the setReadOnly(true) line that was making it non-editable
@@ -1545,32 +1541,31 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
         }
 
         // Symptoms scroll area
-        QScrollArea *symptomsScrollArea = new QScrollArea();
-        QWidget *symptomsWidget = new QWidget();
-        QVBoxLayout *symptomsLayout = new QVBoxLayout(symptomsWidget);
+        auto symptomsScrollArea = new QScrollArea();
+        auto symptomsWidget = new QWidget();
+        auto symptomsLayout = new QVBoxLayout(symptomsWidget);
 
         // Create symptom widgets for ALL available symptoms
         QList<QWidget *> symptomEditWidgets;
         QList<QCheckBox *> symptomCheckboxes;
 
         for (const Symptom &symptom: symptoms) {
-            QHBoxLayout *symptomLayout = new QHBoxLayout();
-
+            auto symptomLayout = new QHBoxLayout();
             // Checkbox to enable/disable the symptom
-            QCheckBox *enabledCheckBox = new QCheckBox();
+            auto enabledCheckBox = new QCheckBox();
             enabledCheckBox->setChecked(currentSymptomValues.contains(symptom.getName()));
             symptomLayout->addWidget(enabledCheckBox);
             symptomCheckboxes.append(enabledCheckBox);
 
             // Symptom name
-            QLabel *nameLabel = new QLabel(symptom.getName() + ":");
+            auto nameLabel = new QLabel(symptom.getName() + ":");
             nameLabel->setMinimumWidth(150);
             symptomLayout->addWidget(nameLabel);
 
             // Value input based on symptom type
             QWidget *valueWidget = nullptr;
             if (symptom.getType() == SymptomType::Binary) {
-                QComboBox *comboBox = new QComboBox();
+                auto comboBox = new QComboBox();
                 comboBox->addItems({"No", "Yes"});
                 if (currentSymptomValues.contains(symptom.getName())) {
                     comboBox->setCurrentIndex(currentSymptomValues[symptom.getName()] > 0 ? 1 : 0);
@@ -1581,7 +1576,7 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
                 // Connect checkbox to enable/disable the combo
                 connect(enabledCheckBox, &QCheckBox::toggled, comboBox, &QComboBox::setEnabled);
             } else {
-                QDoubleSpinBox *spinBox = new QDoubleSpinBox();
+                auto spinBox = new QDoubleSpinBox();
                 spinBox->setRange(0.0, 9999.0);
                 spinBox->setSingleStep(0.1);
                 spinBox->setDecimals(1);
@@ -1602,7 +1597,7 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
             symptomLayout->addWidget(valueWidget);
             symptomLayout->addStretch();
 
-            QWidget *symptomWidget = new QWidget();
+            auto symptomWidget = new QWidget();
             symptomWidget->setLayout(symptomLayout);
             symptomEditWidgets.append(symptomWidget);
             symptomsLayout->addWidget(symptomWidget);
@@ -1614,10 +1609,10 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
         layout->addWidget(symptomsScrollArea);
 
         // Buttons
-        QHBoxLayout *buttonLayout = new QHBoxLayout();
-        QPushButton *saveButton = new QPushButton("Save Changes");
+        auto buttonLayout = new QHBoxLayout();
+        auto saveButton = new QPushButton("Save Changes");
         saveButton->setStyleSheet("background-color: #4CAF50; color: white; padding: 8px 16px;");
-        QPushButton *cancelButton = new QPushButton("Cancel");
+        auto cancelButton = new QPushButton("Cancel");
         cancelButton->setStyleSheet("background-color: #f44336; color: white; padding: 8px 16px;");
 
         buttonLayout->addStretch();
@@ -1656,13 +1651,11 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
                     double value = 0.0;
 
                     if (symptom.getType() == SymptomType::Binary) {
-                        QComboBox *comboBox = qobject_cast<QComboBox *>(valueWidget);
-                        if (comboBox) {
+                        if (QComboBox *comboBox = qobject_cast<QComboBox *>(valueWidget)) {
                             value = comboBox->currentIndex(); // 0 for "No", 1 for "Yes"
                         }
                     } else {
-                        QDoubleSpinBox *spinBox = qobject_cast<QDoubleSpinBox *>(valueWidget);
-                        if (spinBox) {
+                        if (QDoubleSpinBox *spinBox = qobject_cast<QDoubleSpinBox *>(valueWidget)) {
                             value = spinBox->value();
                         }
                     }
@@ -1896,7 +1889,7 @@ bool MainWindow::saveEntry() {
 }
 
 void MainWindow::syncXAxes(const QCPRange &newRange) {
-    QCPAxis *senderAxis = qobject_cast<QCPAxis *>(sender());
+    auto senderAxis = qobject_cast<QCPAxis *>(sender());
     if (!senderAxis || !customPlot || !customPlot->plotLayout())
         return;
 
@@ -2124,8 +2117,7 @@ QString MainWindow::getCurrentDataDirectory() {
     QString username = "default";
 
     if (UserManager::instance().isLoggedIn()) {
-        User *user = UserManager::instance().getCurrentUser();
-        if (user) {
+        if (User *user = UserManager::instance().getCurrentUser()) {
             username = user->getUsername();
         }
     }

@@ -139,7 +139,7 @@ private:
 
     void plotHistogramOverlay(const QList<QVariantMap> &entries, const QStringList &selectedSymptoms);
 
-    void initializeHistogram();
+    void initializeHistogram() const;
 
     void showHistogramContextMenu(const QPoint &pos);
 
