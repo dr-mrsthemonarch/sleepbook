@@ -85,17 +85,6 @@ void WordCloudWidget::setWordFrequencies(const QMap<QString, int>& frequencies) 
     m_layoutTimer->start();
 }
 
-void WordCloudWidget::clearWords() {
-    m_wordFrequencies.clear();
-    m_words.clear();
-    update();
-}
-
-void WordCloudWidget::regenerateLayout() {
-    m_needsLayout = true;
-    m_layoutTimer->start();
-}
-
 void WordCloudWidget::calculateLayout() {
     if (m_words.isEmpty()) {
         return;

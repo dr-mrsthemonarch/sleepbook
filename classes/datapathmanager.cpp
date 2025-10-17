@@ -11,9 +11,9 @@ QString DataPathManager::getAppDataPath() const
 {
     if (m_appDataPath.isEmpty()) {
         // Use AppDataLocation for cross-platform compatibility
-        // On macOS: ~/Library/Application Support/Sleep Book
-        // On Windows: C:/Users/Username/AppData/Roaming/Sleep Book  
-        // On Linux: ~/.local/share/Sleep Book
+        // On macOS: ~/Library/Application Support/sleepbook
+        // On Windows: C:/Users/Username/AppData/Roaming/sleepbook
+        // On Linux: ~/.local/share/sleepbook
         m_appDataPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
         QDir().mkpath(m_appDataPath);
     }

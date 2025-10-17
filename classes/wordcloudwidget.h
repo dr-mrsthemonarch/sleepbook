@@ -2,17 +2,14 @@
 #ifndef WORDCLOUDWIDGET_H
 #define WORDCLOUDWIDGET_H
 
-#include <QWidget>
+
 #include <QPainter>
-#include <QMap>
-#include <QStringList>
 #include <QColor>
 #include <QFont>
 #include <QMouseEvent>
 #include <QToolTip>
 #include <QTimer>
 #include <QRandomGenerator>
-#include <cmath>
 
 struct WordInfo {
     QString text;

@@ -19,14 +19,6 @@ UserManager& UserManager::instance() {
     return instance;
 }
 
-// QString UserManager::getUsersFilePath() const {
-//     QDir dir;
-//     if (!dir.exists("sleep_data")) {
-//         dir.mkpath("sleep_data");
-//     }
-//     return "sleep_data/users.txt";
-// }
-
 QString UserManager::getUsersFilePath() const {
     return DataPathManager::instance().getUsersFilePath();
 }

@@ -2,7 +2,6 @@
 #include "mainwindow.h"
 #include <QToolBar>
 #include <QDataStream>
-#include <QBuffer>
 #include "logindialog.h"
 #include "histogramwidget.h"
 #include "datapathmanager.h"
@@ -664,7 +663,6 @@ void MainWindow::loadStatisticsData() {
         return;
     }
 
-    // Only update symptom list if empty - DON'T clear it every time
     if (symptomListWidget->count() == 0) {
         QListWidgetItem *sleepItem = new QListWidgetItem("Sleep Duration");
         sleepItem->setFlags(sleepItem->flags() | Qt::ItemIsUserCheckable);
@@ -679,7 +677,6 @@ void MainWindow::loadStatisticsData() {
         }
     }
 
-    // Get selected symptoms (this will now preserve user selections)
     QStringList selectedSymptoms;
     for (int i = 0; i < symptomListWidget->count(); ++i) {
         QListWidgetItem *item = symptomListWidget->item(i);
@@ -851,7 +848,6 @@ void MainWindow::loadWordCloudData() {
     if (allNotesText.trimmed().isEmpty()) {
         wordCloudWidget->setWordFrequencies(QMap<QString, int>());
         wordCountLabel->setText("Total words: 0");
-        // QMessageBox::information(this, "No Text Data",QString("No text found in sleep notes from %1 entries.").arg(entries.size()));
         return;
     }
 
@@ -977,7 +973,6 @@ void MainWindow::plotTimeSeriesData(const QList<QVariantMap> &entries, const QSt
 }
 
 void MainWindow::plotHistogramOverlay(const QList<QVariantMap> &entries, const QStringList &selectedSymptoms) {
-    // --- SAFE CLEANUP BEFORE REBUILD ---
     for (QPointer<QCPAxis> xAxis: qAsConst(synchronizedXAxes)) {
         if (xAxis)
             QObject::disconnect(xAxis, nullptr, this, nullptr);
@@ -1092,8 +1087,6 @@ void MainWindow::plotCorrelationData(const QList<QVariantMap> &entries, const QS
     customPlot->clearGraphs();
     customPlot->clearPlottables();
 
-    // For correlation view, create scatter plots between pairs
-    // We'll plot the first symptom vs each other symptom
     QString baseSymptom = selectedSymptoms.first();
 
     QVector<QColor> colors = {
@@ -1370,7 +1363,6 @@ void MainWindow::plotHistogramStacked(const QList<QVariantMap> &entries, const Q
     histogramCustomPlot->setNotAntialiasedElements(QCP::aeNone);
     histogramCustomPlot->replot();
 }
-
 
 void MainWindow::rebuildSymptomWidgets() {
     // Clear existing widgets
@@ -1772,9 +1764,6 @@ void MainWindow::onDeleteHistoryEntry() {
 }
 
 void MainWindow::onPlotTypeChanged(int index) {
-    // Only show histogram mode selector if histogram is selected in statistics tab
-    // Since we moved stacked histograms to their own tab, we can remove this logic
-    // or keep only overlay histogram in statistics tab
     bool isHistogram = (index == 1);
 }
 
@@ -1905,7 +1894,6 @@ bool MainWindow::saveEntry() {
 
     return saveSummaryEntry();
 }
-
 
 void MainWindow::syncXAxes(const QCPRange &newRange) {
     QCPAxis *senderAxis = qobject_cast<QCPAxis *>(sender());
@@ -2150,7 +2138,8 @@ QString MainWindow::getSymptomDataFile() {
     return QString("%1/symptom_history.dat").arg(dataDir);
 }
 
-QList<QVariantMap> MainWindow::filterEntriesByDateRange(const QList<QVariantMap> &entries, const QDate &start,const QDate &end) {
+QList<QVariantMap> MainWindow::filterEntriesByDateRange(const QList<QVariantMap> &entries, const QDate &start,
+                                                        const QDate &end) {
     QList<QVariantMap> filtered;
     for (const auto &entry: entries) {
         QDate entryDate = entry["date"].toDate();
@@ -2169,7 +2158,8 @@ void MainWindow::updateWindowTitle() {
     setWindowTitle(title);
 }
 
-bool MainWindow::updateSummaryEntry(const QDate &date, double duration,const QList<QPair<QString, double> > &symptomData) {
+bool MainWindow::updateSummaryEntry(const QDate &date, double duration,
+                                    const QList<QPair<QString, double> > &symptomData) {
     QString symptomFile = getSymptomDataFile();
     QString password = UserManager::instance().getCurrentUser()->getEncryptionPassword();
 
