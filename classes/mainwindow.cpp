@@ -1848,6 +1848,22 @@ bool MainWindow::saveEntry() {
             .arg(dataDir)
             .arg(dateEdit->date().toString("yyyy-MM-dd"));
 
+    // Check if entry already exists
+    if (QFile::exists(filename)) {
+        QMessageBox::StandardButton reply = QMessageBox::question(
+            this,
+            "Entry Exists",
+            QString("An entry for %1 already exists. Do you want to overwrite it?")
+                .arg(dateEdit->date().toString("yyyy-MM-dd")),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No
+        );
+
+        if (reply == QMessageBox::No) {
+            return false;
+        }
+    }
+
     // Calculate sleep duration
     QDateTime bedDateTime(dateEdit->date(), bedtimeEdit->time());
     QDateTime wakeDateTime(dateEdit->date().addDays(1), wakeupEdit->time());
@@ -1857,7 +1873,7 @@ bool MainWindow::saveEntry() {
     double hours = bedDateTime.secsTo(wakeDateTime) / 3600.0;
 
     // Collect symptom data
-    QList<QPair<QString, double> > symptomData;
+    QList<QPair<QString, double>> symptomData;
     for (SymptomWidget *widget: symptomWidgets) {
         Symptom s = widget->getSymptom();
         if (s.isPresent()) {
@@ -1973,7 +1989,8 @@ bool MainWindow::saveSummaryEntry() {
 
     // Create new entry
     QVariantMap entry;
-    entry["date"] = dateEdit->date();
+    QDate currentDate = dateEdit->date();
+    entry["date"] = currentDate;
     entry["sleep_duration"] = hours;
 
     // Add symptom values
@@ -1982,7 +1999,39 @@ bool MainWindow::saveSummaryEntry() {
         entry[s.getName()] = s.getValue();
     }
 
-    entries.append(entry);
+    // Check if entry for this date already exists in summary
+    bool entryExists = false;
+    int existingIndex = -1;
+
+    for (int i = 0; i < entries.size(); ++i) {
+        if (entries[i]["date"].toDate() == currentDate) {
+            entryExists = true;
+            existingIndex = i;
+            break;
+        }
+    }
+
+    if (entryExists) {
+        QMessageBox::StandardButton reply = QMessageBox::question(
+            this,
+            "Update Entry",
+            QString("An summary entry for %1 already exists. Do you want to update it?")
+                .arg(currentDate.toString("yyyy-MM-dd")),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No
+        );
+
+        if (reply == QMessageBox::Yes) {
+            // Update existing entry
+            entries[existingIndex] = entry;
+        } else {
+            // Keep the existing entry, don't save new one
+            return true; // Return true since we're not treating this as an error
+        }
+    } else {
+        // Add new entry
+        entries.append(entry);
+    }
 
     // Serialize and save
     QByteArray data;
