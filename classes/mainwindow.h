@@ -46,6 +46,43 @@
 
 class WordCloudWidget;
 
+struct SleepEntry {
+    QUuid id;
+    QDateTime timestamp;
+    QDate date;
+    QTime bedtime;
+    QTime waketime;
+    double hours;
+    QString notes;
+    QList<QPair<QString, double>> symptomData;
+
+    SleepEntry() : id(QUuid::createUuid()), hours(0.0) {}
+    SleepEntry(const QUuid &entryId) : id(entryId), hours(0.0) {}
+
+    // Helper method to convert to/from QVariantMap for summary data
+    QVariantMap toVariantMap() const {
+        QVariantMap map;
+        map["id"] = id.toString(QUuid::WithoutBraces);
+        map["date"] = date;
+        map["sleep_duration"] = hours;
+
+        for (const auto &pair : symptomData) {
+            map[pair.first] = pair.second;
+        }
+        return map;
+    }
+
+    static SleepEntry fromVariantMap(const QVariantMap &map) {
+        SleepEntry entry(QUuid::fromString(map["id"].toString()));
+        entry.date = map["date"].toDate();
+        entry.hours = map["sleep_duration"].toDouble();
+
+        // Note: symptomData would need to be populated separately
+        return entry;
+    }
+};
+
+
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
@@ -110,7 +147,7 @@ private:
 
     bool saveEntry();
 
-    bool saveSummaryEntry();
+    bool saveSummaryEntry(const QUuid &entryId);
 
     static QString getCurrentDataDirectory();
 
@@ -149,7 +186,8 @@ private:
 
     void plotCorrelationData(const QList<QVariantMap> &entries, const QStringList &selectedSymptoms);
 
-    bool updateSummaryEntry(const QDate &date, double duration, const QList<QPair<QString, double>> &symptomData);
+    bool updateSummaryEntry(const QUuid &entryId, double duration,
+                            const QList<QPair<QString, double>> &symptomData);
 
     // Word cloud helper functions
     QMap<QString, int> extractWordFrequencies(const QList<QVariantMap>& entries);
