@@ -782,7 +782,7 @@ if (!oldData.isEmpty()) {
                 }
 
                 // Optionally remove the old file after successful migration
-                // QFile::remove(oldFilename);
+                QFile::remove(oldFilename);
 
                 // Use the new data for the dialog
                 data = newData;
