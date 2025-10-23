@@ -29,6 +29,44 @@ MainWindow::~MainWindow() {
     }
 }
 
+bool MainWindow::createSummaryEntry(const QUuid &entryId, const QDate &date, double duration,
+                                    const QList<QPair<QString, double>> &symptomData) {
+    QString symptomFile = getSymptomDataFile();
+    QString password = UserManager::instance().getCurrentUser()->getEncryptionPassword();
+
+    // Load existing summary entries
+    QList<QVariantMap> entries;
+    QByteArray existingData = DataEncryption::loadEncrypted(symptomFile, password);
+
+    if (!existingData.isEmpty()) {
+        QDataStream in(&existingData, QIODevice::ReadOnly);
+        in.setVersion(QDataStream::Qt_5_15);
+        in >> entries;
+    }
+
+    // Create new entry
+    QVariantMap entry;
+    entry["id"] = entryId.toString(QUuid::WithoutBraces);
+    entry["date"] = date;
+    entry["sleep_duration"] = duration;
+
+    // Add symptom values
+    for (const auto &pair : symptomData) {
+        entry[pair.first] = pair.second;
+    }
+
+    // Add to entries
+    entries.append(entry);
+
+    // Save updated entries back to summary file
+    QByteArray data;
+    QDataStream out(&data, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_5_15);
+    out << entries;
+
+    return DataEncryption::saveEncrypted(symptomFile, data, password);
+}
+
 void MainWindow::createUserToolbar() {
     userToolbar = new QToolBar("User", this);
     userToolbar->setMovable(false);
@@ -682,15 +720,76 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
     QTableWidgetItem *dateItem = historyTable->item(row, 0);
     if (!dateItem) return;
 
-    // Get the entry ID instead of date
+    // Try to get the entry ID from UserRole (new system)
     QString entryId = dateItem->data(Qt::UserRole).toString();
+    QDate entryDate = QDate::fromString(dateItem->text(), "yyyy-MM-dd");
 
-    // Load the full entry for this date
     QString dataDir = getCurrentDataDirectory();
-    QString filename = QString("%1/sleep_%2.dat").arg(dataDir).arg(entryId);
-
     QString password = UserManager::instance().getCurrentUser()->getEncryptionPassword();
-    QByteArray data = DataEncryption::loadEncrypted(filename, password);
+
+    QByteArray data;
+    QUuid id;
+    QDateTime timestamp;
+    QDate date;
+    QTime bedtime, waketime;
+    double hours;
+    QString notes;
+    QList<QPair<QString, double>> symptomData;
+
+    if (!entryId.isEmpty()) {
+        // New system: Load by ID
+        QString filename = QString("%1/sleep_%2.dat").arg(dataDir).arg(entryId);
+        data = DataEncryption::loadEncrypted(filename, password);
+
+        if (!data.isEmpty()) {
+            QDataStream in(&data, QIODevice::ReadOnly);
+            in.setVersion(QDataStream::Qt_5_15);
+            in >> id >> timestamp >> date >> bedtime >> waketime >> hours >> notes >> symptomData;
+        }
+    }
+
+    // If not found with new system, try old system (date-based)
+    if (data.isEmpty()) {
+        QString oldFilename = QString("%1/sleep_%2.dat").arg(dataDir).arg(entryDate.toString("yyyy-MM-dd"));
+        data = DataEncryption::loadEncrypted(oldFilename, password);
+        QByteArray oldData = DataEncryption::loadEncrypted(oldFilename, password);
+        // If we found an old entry, migrate it to the new system
+if (!oldData.isEmpty()) {
+            // Read old data
+            QDataStream oldIn(&oldData, QIODevice::ReadOnly);
+            oldIn.setVersion(QDataStream::Qt_5_15);
+            oldIn >> timestamp >> date >> bedtime >> waketime >> hours >> notes >> symptomData;
+
+            // Generate new ID for migration
+            id = QUuid::createUuid();
+            QString newFilename = QString("%1/sleep_%2.dat").arg(dataDir).arg(id.toString(QUuid::WithoutBraces));
+
+            // Write with ID to new file
+            QByteArray newData;
+            QDataStream newOut(&newData, QIODevice::WriteOnly);
+            newOut.setVersion(QDataStream::Qt_5_15);
+            newOut << id << timestamp << date << bedtime << waketime << hours << notes << symptomData;
+
+            // Save new file
+            if (DataEncryption::saveEncrypted(newFilename, newData, password)) {
+                // Update the table to store the new ID
+                dateItem->setData(Qt::UserRole, id.toString(QUuid::WithoutBraces));
+
+                // Also update the summary file - CREATE the entry if it doesn't exist
+                if (!updateSummaryEntry(id, date, hours, symptomData)) {
+                    // If update failed, create new summary entry
+                    createSummaryEntry(id, date, hours, symptomData);
+                }
+
+                // Optionally remove the old file after successful migration
+                // QFile::remove(oldFilename);
+
+                // Use the new data for the dialog
+                data = newData;
+                entryId = id.toString(QUuid::WithoutBraces);
+            }
+        }
+    }
 
     if (!data.isEmpty()) {
         QDataStream in(&data, QIODevice::ReadOnly);
@@ -706,14 +805,18 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
 
         in >> id >> timestamp >> date >> bedtime >> waketime >> hours >> notes >> symptomData;
 
-        // Show editable details dialog
+        // Show editable details dialog (the rest of your existing code remains the same)
         QDialog dialog(this);
         dialog.setWindowTitle(QString("Edit Sleep Entry - %1").arg(date.toString("yyyy-MM-dd")));
         dialog.resize(600, 700);
         auto layout = new QVBoxLayout(&dialog);
 
-        // Date (non-editable)
-        layout->addWidget(new QLabel(QString("<b>Date:</b> %1").arg(date.toString("yyyy-MM-dd"))));
+        // Date (EDITABLE now)
+        layout->addWidget(new QLabel("<b>Date:</b>"));
+        auto dateEdit = new QDateEdit(date);
+        dateEdit->setCalendarPopup(true);
+        dateEdit->setDisplayFormat("yyyy-MM-dd");
+        layout->addWidget(dateEdit);
 
         // Bedtime (editable)
         layout->addWidget(new QLabel("<b>Bedtime:</b>"));
@@ -731,31 +834,32 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
         auto durationLabel = new QLabel(QString("<b>Sleep duration:</b> %1 hours").arg(hours, 0, 'f', 1));
         layout->addWidget(durationLabel);
 
-        // Auto-update duration when times change
+        // Auto-update duration when times OR DATE changes
         auto updateDuration = [=]() {
+            QDate newDate = dateEdit->date();
             QTime bed = bedtimeEdit->time();
             QTime wake = waketimeEdit->time();
 
             // Calculate duration considering overnight sleep
-            QDateTime bedDateTime(date, bed);
-            QDateTime wakeDateTime(date.addDays(1), wake);
+            QDateTime bedDateTime(newDate, bed);
+            QDateTime wakeDateTime(newDate.addDays(1), wake);
             if (wake > bed) {
-                wakeDateTime = QDateTime(date, wake);
+                wakeDateTime = QDateTime(newDate, wake);
             }
 
             double newHours = bedDateTime.secsTo(wakeDateTime) / 3600.0;
             durationLabel->setText(QString("<b>Sleep duration:</b> %1 hours").arg(newHours, 0, 'f', 1));
         };
 
+        connect(dateEdit, &QDateEdit::dateChanged, updateDuration);
         connect(bedtimeEdit, QOverload<const QTime &>::of(&QTimeEdit::timeChanged), updateDuration);
         connect(waketimeEdit, QOverload<const QTime &>::of(&QTimeEdit::timeChanged), updateDuration);
 
-        // Notes (editable) - FIXED: Remove setReadOnly
+        // Notes (editable)
         layout->addWidget(new QLabel("<b>Notes:</b>"));
         auto notesEdit = new QTextEdit();
         notesEdit->setPlainText(notes);
         notesEdit->setMaximumHeight(120);
-        // Remove the setReadOnly(true) line that was making it non-editable
         layout->addWidget(notesEdit);
 
         // Symptoms (editable with add/remove capabilities)
@@ -849,22 +953,23 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
 
         // Connect buttons
         connect(cancelButton, &QPushButton::clicked, &dialog, &QDialog::reject);
-        connect(saveButton, &QPushButton::clicked, [&, id]() {
+        connect(saveButton, &QPushButton::clicked, [&, id, originalDate = date]() {
             // Collect updated data
+            QDate newDate = dateEdit->date();
             QTime newBedtime = bedtimeEdit->time();
             QTime newWaketime = waketimeEdit->time();
-            QString newNotes = notesEdit->toPlainText(); // Now this will work since notes are editable
+            QString newNotes = notesEdit->toPlainText();
 
             // Calculate new duration
-            QDateTime bedDateTime(date, newBedtime);
-            QDateTime wakeDateTime(date.addDays(1), newWaketime);
+            QDateTime bedDateTime(newDate, newBedtime);
+            QDateTime wakeDateTime(newDate.addDays(1), newWaketime);
             if (newWaketime > newBedtime) {
-                wakeDateTime = QDateTime(date, newWaketime);
+                wakeDateTime = QDateTime(newDate, newWaketime);
             }
             double newHours = bedDateTime.secsTo(wakeDateTime) / 3600.0;
 
             // Collect symptom data from ALL symptoms (only enabled ones)
-            QList<QPair<QString, double> > newSymptomData;
+            QList<QPair<QString, double>> newSymptomData;
             for (int i = 0; i < symptoms.size() && i < symptomEditWidgets.size(); ++i) {
                 QCheckBox *checkBox = symptomCheckboxes[i];
                 if (!checkBox->isChecked()) {
@@ -891,39 +996,41 @@ void MainWindow::onHistoryDateSelected(int row, int column) {
                 }
             }
 
-            // Save updated data to daily file
+            // Save updated data to daily file (same filename since we use ID)
             QString updatedFilename = QString("%1/sleep_%2.dat").arg(dataDir).arg(id.toString(QUuid::WithoutBraces));
             QByteArray newData;
             QDataStream out(&newData, QIODevice::WriteOnly);
             out.setVersion(QDataStream::Qt_5_15);
-            out << id << timestamp << date << newBedtime << newWaketime << newHours << newNotes << newSymptomData;
+            out << id << timestamp << newDate << newBedtime << newWaketime << newHours << newNotes << newSymptomData;
 
             bool dailyFileSaved = DataEncryption::saveEncrypted(updatedFilename, newData, password);
 
             // IMPORTANT: Also update the summary file using the ID
-    bool summaryFileSaved = updateSummaryEntry(id, newHours, newSymptomData);
+            bool summaryFileSaved = updateSummaryEntry(id, newDate, newHours, newSymptomData);
 
-    if (dailyFileSaved && summaryFileSaved) {
-        QMessageBox::information(&dialog, "Success", "Entry updated successfully!");
-        dialog.accept();
-        // Refresh the history table and any open plots
-        loadHistoryData();
-        // If statistics tab is open, refresh it too
-        if (tabWidget->currentIndex() == 2) {
-            // Statistics tab index
-            loadStatisticsData();
-        }
-        // If histogram tab is open, refresh it too
-        if (tabWidget->currentIndex() == 3) {
-            // Histogram tab index
-            loadHistogramData();
-        }
-    } else {
-        QMessageBox::critical(&dialog, "Error", "Failed to save changes!");
-    }
+            if (dailyFileSaved && summaryFileSaved) {
+                QMessageBox::information(&dialog, "Success", "Entry updated successfully!");
+                dialog.accept();
+                // Refresh the history table and any open plots
+                loadHistoryData();
+                // If statistics tab is open, refresh it too
+                if (tabWidget->currentIndex() == 2) {
+                    // Statistics tab index
+                    loadStatisticsData();
+                }
+                // If histogram tab is open, refresh it too
+                if (tabWidget->currentIndex() == 3) {
+                    // Histogram tab index
+                    loadHistogramData();
+                }
+            } else {
+                QMessageBox::critical(&dialog, "Error", "Failed to save changes!");
+            }
         });
 
         dialog.exec();
+    } else {
+        QMessageBox::warning(this, "Error", "Could not load the selected entry.");
     }
 }
 
@@ -2205,7 +2312,7 @@ void MainWindow::updateWindowTitle() {
     setWindowTitle(title);
 }
 
-bool MainWindow::updateSummaryEntry(const QUuid &entryId, double duration,
+bool MainWindow::updateSummaryEntry(const QUuid &entryId, const QDate &newDate, double duration,
                                     const QList<QPair<QString, double>> &symptomData) {
     QString symptomFile = getSymptomDataFile();
     QString password = UserManager::instance().getCurrentUser()->getEncryptionPassword();
@@ -2228,7 +2335,8 @@ bool MainWindow::updateSummaryEntry(const QUuid &entryId, double duration,
         QVariantMap &entry = entries[i];
 
         if (entry["id"].toString() == entryIdString) {
-            // Update existing entry
+            // Update existing entry with new date and other data
+            entry["date"] = newDate;
             entry["sleep_duration"] = duration;
 
             // Update symptom values

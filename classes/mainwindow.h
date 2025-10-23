@@ -91,7 +91,8 @@ public:
 
     ~MainWindow();
 
-private slots:
+
+  private slots:
     void onSaveEntry();
 
     void onAddSymptom();
@@ -186,8 +187,13 @@ private:
 
     void plotCorrelationData(const QList<QVariantMap> &entries, const QStringList &selectedSymptoms);
 
-    bool updateSummaryEntry(const QUuid &entryId, double duration,
+    bool updateSummaryEntry(const QUuid &entryId, const QDate &newDate,
+                            double duration,
                             const QList<QPair<QString, double>> &symptomData);
+
+    bool createSummaryEntry(const QUuid &entryId, const QDate &date,
+                        double duration,
+                        const QList<QPair<QString, double>> &symptomData);
 
     // Word cloud helper functions
     QMap<QString, int> extractWordFrequencies(const QList<QVariantMap>& entries);
